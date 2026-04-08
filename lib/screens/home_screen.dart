@@ -30,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   List<Match> localMatches = [];
   List<Match> allMatches = [];
   final TextEditingController _newSeasonController = TextEditingController();
+  final TextEditingController _calendarTeamsController = TextEditingController();
 
   @override
   void initState() {
@@ -75,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _simulationTimer.cancel();
     _tabController.dispose();
     _newSeasonController.dispose();
+    _calendarTeamsController.dispose();
     super.dispose();
   }
 
@@ -82,6 +84,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = context.watch<UserProvider>().currentUser;
+
     return Scaffold(
       backgroundColor: BetFlixColors.background,
       body: CustomScrollView(
@@ -93,8 +97,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             pinned: true,
             flexibleSpace: FlexibleSpaceBar(
               background: ProfessionalHeader(
-                userName: 'Carlos G.',
-                coins: 3200,
+                userName: currentUser?.name ?? 'Usuario',
+                coins: currentUser?.coins ?? 0,
                 rankPosition: 1,
                 onProfileTap: () {
                   // Ir a perfil
@@ -454,6 +458,40 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => Navigator.pushNamed(context, '/tournament-center'),
+                icon: const Icon(Icons.dashboard_customize, color: BetFlixColors.cyanBright),
+                label: const Text(
+                  'Abrir Centro de Torneos',
+                  style: TextStyle(color: BetFlixColors.cyanBright, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: season == null ? null : () => _generateCalendarDialog(season),
+                    style: ElevatedButton.styleFrom(backgroundColor: BetFlixColors.cyanBright),
+                    icon: const Icon(Icons.calendar_month, color: Colors.black),
+                    label: const Text('Generar jornadas + playoff', style: TextStyle(color: Colors.black)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: season == null ? null : () => _awardSeasonPrizes(season),
+                    style: ElevatedButton.styleFrom(backgroundColor: BetFlixColors.goldYellow),
+                    icon: const Icon(Icons.emoji_events, color: Colors.black),
+                    label: const Text('Premiar temporada', style: TextStyle(color: Colors.black)),
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
             Text(
               season == null ? 'Cargando temporada...' : 'Activa: ${season.name}',
@@ -537,6 +575,53 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       },
                     ),
             ),
+            if (season != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF202035),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.2)),
+                ),
+                child: StreamBuilder<List<Match>>(
+                  stream: context.watch<BetProvider>().getSeasonFixturesStream(seasonId: season.id),
+                  builder: (context, snapshot) {
+                    final fixtures = snapshot.data ?? const <Match>[];
+                    if (fixtures.isEmpty) {
+                      return const Text(
+                        'No hay calendario generado todavía para esta temporada.',
+                        style: TextStyle(color: Colors.white70),
+                      );
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Calendario (Jornadas y Playoff)',
+                          style: TextStyle(
+                            color: BetFlixColors.cyanBright,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...fixtures.take(8).map((fixture) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text(
+                              'J${fixture.roundNumber ?? 0} • ${fixture.phase ?? 'regular'} • ${fixture.homeTeam} vs ${fixture.awayTeam}',
+                              style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
           ],
         );
       },
@@ -582,6 +667,83 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(success ? 'Nueva temporada creada: $name' : 'No se pudo crear la temporada.'),
+      ),
+    );
+  }
+
+  Future<void> _generateCalendarDialog(NeighborhoodSeason season) async {
+    _calendarTeamsController.text = [
+      'Barrio Norte FC',
+      'Almagro Juniors',
+      'Atlético Ciudad',
+      'Racing Pueblo',
+      'Libertad FC',
+      'Fénix Rojos',
+    ].join('\n');
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1C1C30),
+          title: const Text('Generar calendario', style: TextStyle(color: Colors.white)),
+          content: SizedBox(
+            width: 420,
+            child: TextField(
+              controller: _calendarTeamsController,
+              maxLines: 10,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                hintText: 'Un equipo por línea',
+                hintStyle: TextStyle(color: Colors.white54),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Generar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true || !mounted) return;
+    final teams = _calendarTeamsController.text
+        .split('\n')
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+
+    final success = await context.read<BetProvider>().generateSeasonSchedule(
+          seasonId: season.id,
+          seasonName: season.name,
+          teams: teams,
+        );
+
+    if (!mounted) return;
+    final error = context.read<BetProvider>().errorMessage;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success
+            ? 'Calendario generado con jornadas + playoff.'
+            : (error ?? 'No se pudo generar el calendario.')),
+      ),
+    );
+  }
+
+  Future<void> _awardSeasonPrizes(NeighborhoodSeason season) async {
+    final message = await context.read<BetProvider>().awardSeasonPrizes(seasonId: season.id);
+    if (!mounted) return;
+    final error = context.read<BetProvider>().errorMessage;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message ?? error ?? 'No se pudieron aplicar premios de temporada.'),
       ),
     );
   }

@@ -8,6 +8,22 @@ class BetService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  String _mapFirestoreError(Object e) {
+    if (e is FirebaseException) {
+      if (e.code == 'permission-denied') {
+        return 'Firestore deniega permisos. Revisa reglas y que el usuario esté autenticado.';
+      }
+      if (e.code == 'failed-precondition') {
+        return 'Firestore requiere un índice para esta consulta. Crea los índices de firestore.indexes.json.';
+      }
+      if (e.code == 'unavailable') {
+        return 'Firestore no disponible. Revisa conexión e inicialización de Firebase.';
+      }
+      return e.message ?? 'Error de Firebase (${e.code}).';
+    }
+    return e.toString();
+  }
+
   Future<NeighborhoodSeason> _getOrCreateActiveSeason() async {
     final activeSnapshot = await _firestore
         .collection('seasons')
@@ -86,6 +102,124 @@ class BetService {
     await batch.commit();
   }
 
+  Future<void> resolvePlayoffBracketForSeason({required String seasonId}) async {
+    final finishedRegularSnapshot = await _firestore
+        .collection('matches')
+        .where('seasonId', isEqualTo: seasonId)
+        .where('phase', isEqualTo: 'regular')
+        .where('status', isEqualTo: MatchStatus.finished.name)
+        .get();
+
+    final Map<String, _TeamAccumulator> table = {};
+    for (final doc in finishedRegularSnapshot.docs) {
+      final match = _matchFromDoc(doc);
+      final homeGoals = match.homeScore ?? 0;
+      final awayGoals = match.awayScore ?? 0;
+
+      table.putIfAbsent(match.homeTeam, () => _TeamAccumulator());
+      table.putIfAbsent(match.awayTeam, () => _TeamAccumulator());
+
+      final home = table[match.homeTeam]!;
+      final away = table[match.awayTeam]!;
+      home.played++;
+      away.played++;
+      home.goalsFor += homeGoals;
+      home.goalsAgainst += awayGoals;
+      away.goalsFor += awayGoals;
+      away.goalsAgainst += homeGoals;
+
+      if (homeGoals > awayGoals) {
+        home.won++;
+        away.lost++;
+        home.points += 3;
+      } else if (homeGoals < awayGoals) {
+        away.won++;
+        home.lost++;
+        away.points += 3;
+      } else {
+        home.draw++;
+        away.draw++;
+        home.points += 1;
+        away.points += 1;
+      }
+    }
+
+    final ranking = table.entries.toList()
+      ..sort((a, b) {
+        if (b.value.points != a.value.points) {
+          return b.value.points.compareTo(a.value.points);
+        }
+        final gdA = a.value.goalsFor - a.value.goalsAgainst;
+        final gdB = b.value.goalsFor - b.value.goalsAgainst;
+        if (gdB != gdA) return gdB.compareTo(gdA);
+        return b.value.goalsFor.compareTo(a.value.goalsFor);
+      });
+
+    if (ranking.length >= 4) {
+      final top = ranking.take(4).map((e) => e.key).toList();
+      final semisSnapshot = await _firestore
+          .collection('matches')
+          .where('seasonId', isEqualTo: seasonId)
+          .where('phase', isEqualTo: 'playoff_semifinal')
+          .orderBy('roundNumber')
+          .get();
+
+      if (semisSnapshot.docs.length >= 2) {
+        await semisSnapshot.docs[0].reference.update({
+          'homeTeam': top[0],
+          'awayTeam': top[3],
+        });
+        await semisSnapshot.docs[1].reference.update({
+          'homeTeam': top[1],
+          'awayTeam': top[2],
+        });
+      }
+    }
+
+    final finishedSemisSnapshot = await _firestore
+        .collection('matches')
+        .where('seasonId', isEqualTo: seasonId)
+        .where('phase', isEqualTo: 'playoff_semifinal')
+        .where('status', isEqualTo: MatchStatus.finished.name)
+        .orderBy('roundNumber')
+        .get();
+
+    if (finishedSemisSnapshot.docs.length < 2) return;
+
+    final semi1 = _matchFromDoc(finishedSemisSnapshot.docs[0]);
+    final semi2 = _matchFromDoc(finishedSemisSnapshot.docs[1]);
+    final semi1Winner = (semi1.homeScore ?? 0) >= (semi1.awayScore ?? 0) ? semi1.homeTeam : semi1.awayTeam;
+    final semi1Loser = semi1Winner == semi1.homeTeam ? semi1.awayTeam : semi1.homeTeam;
+    final semi2Winner = (semi2.homeScore ?? 0) >= (semi2.awayScore ?? 0) ? semi2.homeTeam : semi2.awayTeam;
+    final semi2Loser = semi2Winner == semi2.homeTeam ? semi2.awayTeam : semi2.homeTeam;
+
+    final finalSnapshot = await _firestore
+        .collection('matches')
+        .where('seasonId', isEqualTo: seasonId)
+        .where('phase', isEqualTo: 'playoff_final')
+        .limit(1)
+        .get();
+    final thirdSnapshot = await _firestore
+        .collection('matches')
+        .where('seasonId', isEqualTo: seasonId)
+        .where('phase', isEqualTo: 'playoff_third_place')
+        .limit(1)
+        .get();
+
+    if (finalSnapshot.docs.isNotEmpty) {
+      await finalSnapshot.docs.first.reference.update({
+        'homeTeam': semi1Winner,
+        'awayTeam': semi2Winner,
+      });
+    }
+    if (thirdSnapshot.docs.isNotEmpty) {
+      await thirdSnapshot.docs.first.reference.update({
+        'homeTeam': semi1Loser,
+        'awayTeam': semi2Loser,
+      });
+    }
+  }
+
   DateTime _parseDateTime(dynamic value) {
     if (value is Timestamp) return value.toDate();
     if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
@@ -109,6 +243,9 @@ class BetService {
   MatchSource _matchSourceFromString(String? value) {
     if (value == MatchSource.userCreated.name) {
       return MatchSource.userCreated;
+    }
+    if (value == MatchSource.tournamentGenerated.name) {
+      return MatchSource.tournamentGenerated;
     }
     return MatchSource.randomGenerated;
   }
@@ -151,7 +288,299 @@ class BetService {
       betsCount: (data['betsCount'] as int?) ?? 0,
       seasonId: data['seasonId'] as String?,
       seasonName: data['seasonName'] as String?,
+      roundNumber: data['roundNumber'] as int?,
+      phase: data['phase'] as String?,
     );
+  }
+
+  List<List<String>> _buildRoundRobinRounds(List<String> originalTeams) {
+    final teams = List<String>.from(originalTeams);
+    if (teams.length.isOdd) {
+      teams.add('BYE');
+    }
+
+    final rounds = <List<String>>[];
+    final n = teams.length;
+    final half = n ~/ 2;
+
+    for (int round = 0; round < n - 1; round++) {
+      final pairings = <String>[];
+      for (int i = 0; i < half; i++) {
+        final home = teams[i];
+        final away = teams[n - 1 - i];
+        if (home != 'BYE' && away != 'BYE') {
+          pairings.add('$home|$away');
+        }
+      }
+      rounds.add(pairings);
+
+      final fixed = teams.first;
+      final rotating = teams.sublist(1);
+      rotating.insert(0, rotating.removeLast());
+      teams
+        ..clear()
+        ..add(fixed)
+        ..addAll(rotating);
+    }
+
+    return rounds;
+  }
+
+  Future<bool> generateSeasonSchedule({
+    required String seasonId,
+    required String seasonName,
+    required List<String> teams,
+    DateTime? firstKickoff,
+  }) async {
+    if (teams.length < 4) {
+      throw 'Se requieren al menos 4 equipos para generar calendario.';
+    }
+
+    final normalized = teams
+        .map((team) => team.trim())
+        .where((team) => team.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (normalized.length < 4) {
+      throw 'Debes introducir al menos 4 equipos únicos.';
+    }
+
+    final existing = await _firestore
+        .collection('matches')
+        .where('seasonId', isEqualTo: seasonId)
+        .where('source', isEqualTo: MatchSource.tournamentGenerated.name)
+        .limit(1)
+        .get();
+    if (existing.docs.isNotEmpty) {
+      throw 'Esta temporada ya tiene calendario generado.';
+    }
+
+    final kickoffBase = firstKickoff ?? DateTime.now().add(const Duration(days: 1));
+    final rounds = _buildRoundRobinRounds(normalized);
+    final batch = _firestore.batch();
+
+    for (int r = 0; r < rounds.length; r++) {
+      final roundPairings = rounds[r];
+      for (int m = 0; m < roundPairings.length; m++) {
+        final parts = roundPairings[m].split('|');
+        final home = parts[0];
+        final away = parts[1];
+        final kickoff = kickoffBase.add(Duration(days: r * 7, hours: m * 2));
+        final ref = _firestore.collection('matches').doc();
+        batch.set(ref, {
+          'homeTeam': home,
+          'awayTeam': away,
+          'homeTeamLogo': '🏟️',
+          'awayTeamLogo': '🏟️',
+          'homeScore': 0,
+          'awayScore': 0,
+          'shotsOnTargetTotal': 0,
+          'firstScoringTeam': '',
+          'dateTime': kickoff.toIso8601String(),
+          'status': MatchStatus.scheduled.name,
+          'league': 'Torneo de Barrio',
+          'isLocal': true,
+          'createdByUserId': 'system',
+          'createdByName': 'Calendario BetFlix',
+          'source': MatchSource.tournamentGenerated.name,
+          'betsCount': 0,
+          'seasonId': seasonId,
+          'seasonName': seasonName,
+          'roundNumber': r + 1,
+          'phase': 'regular',
+          'createdAt': DateTime.now().toIso8601String(),
+        });
+      }
+    }
+
+    // Playoff placeholders (semis + final + tercer puesto)
+    final playoffBase = kickoffBase.add(Duration(days: rounds.length * 7 + 1));
+    final playoffMatches = [
+      {'home': '1º Liga', 'away': '4º Liga', 'round': rounds.length + 1, 'phase': 'playoff_semifinal'},
+      {'home': '2º Liga', 'away': '3º Liga', 'round': rounds.length + 1, 'phase': 'playoff_semifinal'},
+      {'home': 'Perdedor SF1', 'away': 'Perdedor SF2', 'round': rounds.length + 2, 'phase': 'playoff_third_place'},
+      {'home': 'Ganador SF1', 'away': 'Ganador SF2', 'round': rounds.length + 2, 'phase': 'playoff_final'},
+    ];
+
+    for (int i = 0; i < playoffMatches.length; i++) {
+      final p = playoffMatches[i];
+      final ref = _firestore.collection('matches').doc();
+      batch.set(ref, {
+        'homeTeam': p['home'],
+        'awayTeam': p['away'],
+        'homeTeamLogo': '🏆',
+        'awayTeamLogo': '🏆',
+        'homeScore': 0,
+        'awayScore': 0,
+        'shotsOnTargetTotal': 0,
+        'firstScoringTeam': '',
+        'dateTime': playoffBase.add(Duration(days: i < 2 ? 0 : 7, hours: i * 2)).toIso8601String(),
+        'status': MatchStatus.scheduled.name,
+        'league': 'Playoff Torneo de Barrio',
+        'isLocal': true,
+        'createdByUserId': 'system',
+        'createdByName': 'Calendario BetFlix',
+        'source': MatchSource.tournamentGenerated.name,
+        'betsCount': 0,
+        'seasonId': seasonId,
+        'seasonName': seasonName,
+        'roundNumber': p['round'],
+        'phase': p['phase'],
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+    }
+
+    await batch.commit();
+    return true;
+  }
+
+  Stream<List<Match>> getSeasonFixturesStream({required String seasonId}) {
+    return _firestore
+        .collection('matches')
+        .where('seasonId', isEqualTo: seasonId)
+        .orderBy('roundNumber')
+        .orderBy('dateTime')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map(_matchFromDoc).toList());
+  }
+
+  Future<String> awardSeasonPrizes({required String seasonId}) async {
+    final rewardDocRef = _firestore.collection('season_rewards').doc(seasonId);
+    final existingRewardDoc = await rewardDocRef.get();
+    if (existingRewardDoc.exists) {
+      return 'La temporada ya fue premiada anteriormente.';
+    }
+
+    final matchesSnapshot = await _firestore
+        .collection('matches')
+        .where('seasonId', isEqualTo: seasonId)
+        .where('status', isEqualTo: MatchStatus.finished.name)
+        .get();
+
+    final matchIds = matchesSnapshot.docs.map((doc) => doc.id).toList();
+    if (matchIds.isEmpty) {
+      throw 'No hay partidos finalizados en esta temporada.';
+    }
+
+    final Map<String, _SeasonUserStat> stats = {};
+
+    for (int i = 0; i < matchIds.length; i += 10) {
+      final chunk = matchIds.sublist(i, i + 10 > matchIds.length ? matchIds.length : i + 10);
+      final betsSnapshot = await _firestore
+          .collection('bets')
+          .where('matchId', whereIn: chunk)
+          .get();
+
+      for (final doc in betsSnapshot.docs) {
+        final data = doc.data();
+        final userId = data['userId'] as String?;
+        if (userId == null || userId.isEmpty) continue;
+
+        final entry = stats.putIfAbsent(userId, () => _SeasonUserStat());
+        entry.totalBets += 1;
+
+        final status = data['status'] as String?;
+        final amount = (data['amount'] as num?)?.toInt() ?? 0;
+        final payout = (data['potentialWinnings'] as num?)?.toInt() ?? 0;
+
+        if (status == BetStatus.won.name) {
+          entry.wonBets += 1;
+          entry.net += payout;
+        } else if (status == BetStatus.lost.name) {
+          entry.net -= amount;
+        }
+      }
+    }
+
+    if (stats.isEmpty) {
+      throw 'No hay apuestas para premiar en esta temporada.';
+    }
+
+    final sorted = stats.entries.toList()
+      ..sort((a, b) {
+        if (b.value.net != a.value.net) return b.value.net.compareTo(a.value.net);
+        return b.value.wonBets.compareTo(a.value.wonBets);
+      });
+
+    final top3 = sorted.take(3).toList();
+    final bonuses = [5000, 3000, 1500];
+    final batch = _firestore.batch();
+    final winnersPayload = <Map<String, dynamic>>[];
+
+    for (int i = 0; i < top3.length; i++) {
+      final userId = top3[i].key;
+      final bonus = bonuses[i];
+      final userRef = _firestore.collection('users').doc(userId);
+      batch.set(userRef, {'coins': FieldValue.increment(bonus)}, SetOptions(merge: true));
+      winnersPayload.add({
+        'position': i + 1,
+        'userId': userId,
+        'bonus': bonus,
+        'net': top3[i].value.net,
+      });
+    }
+
+    String? mvpUserId;
+    double bestRate = -1;
+    for (final entry in sorted) {
+      if (entry.value.totalBets < 3) continue;
+      final rate = entry.value.wonBets / entry.value.totalBets;
+      if (rate > bestRate) {
+        bestRate = rate;
+        mvpUserId = entry.key;
+      }
+    }
+    mvpUserId ??= sorted.first.key;
+
+    final mvpRef = _firestore.collection('users').doc(mvpUserId);
+    batch.set(mvpRef, {'coins': FieldValue.increment(2500)}, SetOptions(merge: true));
+
+    final seasonDoc = await _firestore.collection('seasons').doc(seasonId).get();
+    final seasonName = (seasonDoc.data() ?? {})['name'] ?? seasonId;
+
+    batch.set(rewardDocRef, {
+      'seasonId': seasonId,
+      'seasonName': seasonName,
+      'awardedAt': DateTime.now().toIso8601String(),
+      'top3': winnersPayload,
+      'championUserId': top3.isNotEmpty ? top3.first.key : '',
+      'championBonus': bonuses.first,
+      'mvpUserId': mvpUserId,
+      'mvpBonus': 2500,
+    });
+
+    batch.set(
+      _firestore.collection('seasons').doc(seasonId),
+      {
+        'isActive': false,
+        'awardedAt': DateTime.now().toIso8601String(),
+      },
+      SetOptions(merge: true),
+    );
+
+    await batch.commit();
+    return 'Premios aplicados: Top 3 + MVP con bonos de temporada.';
+  }
+
+  Stream<List<SeasonChampionEntry>> getSeasonChampionsHistoryStream() {
+    return _firestore
+        .collection('season_rewards')
+        .orderBy('awardedAt', descending: true)
+        .limit(30)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return SeasonChampionEntry(
+          seasonId: data['seasonId'] ?? doc.id,
+          seasonName: data['seasonName'] ?? data['seasonId'] ?? doc.id,
+          championUserId: data['championUserId'] ?? '',
+          awardedAt: _parseDateTime(data['awardedAt']),
+          championBonus: (data['championBonus'] as num?)?.toInt() ?? 0,
+        );
+      }).toList();
+    });
   }
 
   Future<String> createCustomMatch({
@@ -187,7 +616,7 @@ class BetService {
       });
       return docRef.id;
     } catch (e) {
-      throw 'Error al crear partido personalizado: $e';
+      throw 'Error al crear partido personalizado: ${_mapFirestoreError(e)}';
     }
   }
 
@@ -274,8 +703,12 @@ class BetService {
     if (snapshot.docs.isEmpty) return;
 
     final random = Random();
+    final touchedSeasons = <String>{};
     for (final doc in snapshot.docs) {
       final match = _matchFromDoc(doc);
+      if (match.seasonId != null && match.seasonId!.isNotEmpty) {
+        touchedSeasons.add(match.seasonId!);
+      }
       final homeScore = match.homeScore ?? random.nextInt(5);
       final awayScore = match.awayScore ?? random.nextInt(5);
       final shots = match.shotsOnTargetTotal ?? (5 + random.nextInt(10));
@@ -315,6 +748,10 @@ class BetService {
           seasonName: match.seasonName,
         ),
       );
+    }
+
+    for (final seasonId in touchedSeasons) {
+      await resolvePlayoffBracketForSeason(seasonId: seasonId);
     }
   }
 
@@ -371,6 +808,11 @@ class BetService {
         seasonName: data['seasonName'] as String?,
       );
       await resolveBetsForMatch(match: updatedMatch);
+
+      final sid = updatedMatch.seasonId;
+      if (sid != null && sid.isNotEmpty) {
+        await resolvePlayoffBracketForSeason(seasonId: sid);
+      }
     }
   }
 
@@ -410,9 +852,14 @@ class BetService {
         'betsCount': FieldValue.increment(1),
       }, SetOptions(merge: true));
 
+      final userRef = _firestore.collection('users').doc(userId);
+      batch.set(userRef, {
+        'totalBets': FieldValue.increment(1),
+      }, SetOptions(merge: true));
+
       await batch.commit();
     } catch (e) {
-      throw 'Error al crear apuesta: $e';
+      throw 'Error al crear apuesta: ${_mapFirestoreError(e)}';
     }
   }
 
@@ -531,7 +978,7 @@ class BetService {
         );
       }).toList();
     } catch (e) {
-      throw 'Error al obtener apuestas: $e';
+      throw 'Error al obtener apuestas: ${_mapFirestoreError(e)}';
     }
   }
 
@@ -572,11 +1019,10 @@ class BetService {
 
       if (won) {
         final userDocRef = _firestore.collection('users').doc(userId);
-        final userDoc = await userDocRef.get();
-        if (userDoc.exists) {
-          final currentCoins = (userDoc.data() as Map<String, dynamic>)['coins'] as int;
-          await userDocRef.update({'coins': currentCoins + potentialWinnings});
-        }
+        await userDocRef.set({
+          'coins': FieldValue.increment(potentialWinnings),
+          'correctBets': FieldValue.increment(1),
+        }, SetOptions(merge: true));
       }
     }
   }
@@ -678,6 +1124,12 @@ class BetService {
 
   /// Obtener todas las apuestas para ranking
   Stream<List<RankingEntry>> getRankingStream() {
+    const sampleDemoEmails = {
+      'agarcia@gmail.com',
+      'jterreros@gmail.com',
+      'gblanco@gmail.com',
+    };
+
     return _firestore
         .collection('users')
         .orderBy('coins', descending: true)
@@ -688,8 +1140,19 @@ class BetService {
       for (int i = 0; i < snapshot.docs.length; i++) {
         final doc = snapshot.docs[i];
         final data = doc.data();
+
+        final isDemo = data['isDemo'] == true;
+        final email = (data['email'] ?? '').toString().trim().toLowerCase();
+        final name = (data['name'] ?? '').toString().trim().toLowerCase();
+        final looksLikeSampleName = name == 'aaron garcia' ||
+            name == 'jan terreros' ||
+            name == 'gerard blanco';
+        if (isDemo || sampleDemoEmails.contains(email) || looksLikeSampleName) {
+          continue;
+        }
+
         entries.add(RankingEntry(
-          position: i + 1,
+          position: entries.length + 1,
           userId: doc.id,
           userName: data['name'] ?? 'Anónimo',
           profileImageUrl: data['profileImageUrl'] ?? '?',
@@ -712,4 +1175,10 @@ class _TeamAccumulator {
   int goalsFor = 0;
   int goalsAgainst = 0;
   int points = 0;
+}
+
+class _SeasonUserStat {
+  int totalBets = 0;
+  int wonBets = 0;
+  int net = 0;
 }

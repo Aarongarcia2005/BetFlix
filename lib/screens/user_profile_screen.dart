@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import '../config/colors.dart';
-import '../config/app_constants.dart';
-import '../config/app_theme.dart';
-import '../models/models.dart';
-import '../widgets/betflix_widgets.dart';
+import 'package:provider/provider.dart';
 
-/// Pantalla de perfil de usuario
+import '../config/app_constants.dart';
+import '../config/colors.dart';
+import '../models/models.dart';
+import '../providers/user_provider.dart';
+import 'login_screen.dart';
+
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({Key? key}) : super(key: key);
 
@@ -14,255 +15,282 @@ class UserProfileScreen extends StatefulWidget {
 }
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
-  final BetFlixUser userExample = BetFlixUser(
-    id: '1',
-    name: 'Carlos G.',
-    email: 'carlos@example.com',
-    profileImageUrl: 'C',
-    coins: 3200,
-    winStreak: 5,
-    totalBets: 50,
-    correctBets: 38,
-    level: 4,
-    joinDate: DateTime(2023, 6, 15),
-  );
+  final TextEditingController _nameController = TextEditingController();
+  String _selectedAvatar = '🙂';
+  bool _isEditing = false;
+  String _avatarFilter = 'todos';
 
-  final List<BetFlixBadge> badges = [
-    BetFlixBadge(
-      id: '1',
-      title: 'Campeón',
-      description: 'Primer lugar en ranking',
-      icon: Icons.emoji_events,
-      unlocked: true,
-    ),
-    BetFlixBadge(
-      id: '2',
-      title: 'Tripleta',
-      description: '3 victorias consecutivas',
-      icon: Icons.trending_up,
-      unlocked: true,
-    ),
-    BetFlixBadge(
-      id: '3',
-      title: 'Recha Mágica',
-      description: '10 victorias consecutivas',
-      icon: Icons.local_fire_department,
-      unlocked: false,
-    ),
+  static const List<String> _maleAvatars = [
+    '🧑‍🦱', '🧑‍🦰', '🧑‍🦲', '🧔', '👨‍💼', '👨‍🎤', '👨‍🎨', '👨‍🚀',
   ];
+  static const List<String> _femaleAvatars = [
+    '👩‍🦱', '👩‍🦰', '👩‍🦳', '👱‍♀️', '👩‍💼', '👩‍🎤', '👩‍🎨', '👩‍🚀',
+  ];
+  static const List<String> _styleAvatars = [
+    '🤖', '🐯', '🦊', '🐼', '🦁', '🐨', '🦄', '🐸', '😎', '🔥', '⚽', '🎮',
+  ];
+
+  List<String> get _filteredAvatars {
+    switch (_avatarFilter) {
+      case 'chico':
+        return _maleAvatars;
+      case 'chica':
+        return _femaleAvatars;
+      case 'estilo':
+        return _styleAvatars;
+      default:
+        return [..._maleAvatars, ..._femaleAvatars, ..._styleAvatars];
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _syncFromUser(BetFlixUser user) {
+    if (!_isEditing) {
+      _nameController.text = user.name;
+      _selectedAvatar = user.profileImageUrl.isNotEmpty ? user.profileImageUrl : '🙂';
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('El nombre no puede estar vacío.')),
+      );
+      return;
+    }
+
+    final success = await context.read<UserProvider>().updateProfile(
+          name: name,
+          profileImageUrl: _selectedAvatar,
+        );
+
+    if (!mounted) return;
+
+    if (success) {
+      setState(() => _isEditing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Perfil actualizado.'),
+          backgroundColor: BetFlixColors.success,
+        ),
+      );
+    } else {
+      final err = context.read<UserProvider>().errorMessage ?? 'No se pudo guardar el perfil.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), backgroundColor: BetFlixColors.accentRed),
+      );
+    }
+  }
+
+  Future<void> _logout() async {
+    await context.read<UserProvider>().signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<UserProvider>();
+    final user = provider.currentUser;
+
+    if (user == null) {
+      return const Scaffold(
+        backgroundColor: BetFlixColors.background,
+        body: Center(
+          child: Text('No hay usuario activo', style: TextStyle(color: Colors.white)),
+        ),
+      );
+    }
+
+    _syncFromUser(user);
+
     return Scaffold(
       backgroundColor: BetFlixColors.background,
       appBar: AppBar(
         title: const Text('Mi Perfil'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: Icon(_isEditing ? Icons.close : Icons.edit),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Configuración'),
-                ),
-              );
+              setState(() {
+                _isEditing = !_isEditing;
+                if (!_isEditing) {
+                  _syncFromUser(user);
+                }
+              });
             },
           ),
         ],
       ),
       body: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppConstants.paddingMedium),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header de perfil
             Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: BetFlixColors.primaryGradient,
+                  colors: [
+                    BetFlixColors.purpleVibrant.withOpacity(0.9),
+                    BetFlixColors.primaryBlueLight,
+                  ],
                 ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.3)),
               ),
-              padding: const EdgeInsets.all(AppConstants.paddingLarge),
               child: Column(
                 children: [
                   Container(
-                    width: 100,
-                    height: 100,
+                    width: 110,
+                    height: 110,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: BetFlixColors.white,
-                      border: Border.all(
-                        color: BetFlixColors.goldYellow,
-                        width: 3,
-                      ),
+                      color: const Color(0xFF1A1A2E),
+                      border: Border.all(color: BetFlixColors.goldYellow, width: 3),
                     ),
                     child: Center(
                       child: Text(
-                        userExample.profileImageUrl,
-                        style: const TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.bold,
-                          color: BetFlixColors.primaryBlue,
+                        _selectedAvatar,
+                        style: const TextStyle(fontSize: 48),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_isEditing)
+                    TextField(
+                      controller: _nameController,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      decoration: const InputDecoration(
+                        hintText: 'Tu nombre',
+                        hintStyle: TextStyle(color: Colors.white54),
+                        border: InputBorder.none,
+                      ),
+                    )
+                  else
+                    Text(
+                      user.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  Text(
+                    user.email,
+                    style: const TextStyle(color: BetFlixColors.cyanBright),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Coins: ${user.coins}  •  Nivel ${user.level}',
+                      style: const TextStyle(
+                        color: BetFlixColors.goldYellow,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (_isEditing) ...[
+              const Text(
+                'Elige tu avatar',
+                style: TextStyle(
+                  color: BetFlixColors.cyanBright,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                children: [
+                  _filterChip('todos', 'Todos'),
+                  _filterChip('chico', 'Chico'),
+                  _filterChip('chica', 'Chica'),
+                  _filterChip('estilo', 'Estilo'),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C1C30),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: BetFlixColors.purpleVibrant.withOpacity(0.3)),
+                ),
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _filteredAvatars.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 6,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemBuilder: (_, index) {
+                    final avatar = _filteredAvatars[index];
+                    final selected = avatar == _selectedAvatar;
+                    return InkWell(
+                      onTap: () => setState(() => _selectedAvatar = avatar),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? BetFlixColors.pinkBright.withOpacity(0.25)
+                              : const Color(0xFF2A2A3E),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: selected ? BetFlixColors.pinkBright : Colors.transparent,
+                            width: 2,
+                          ),
                         ),
+                        child: Center(child: Text(avatar, style: const TextStyle(fontSize: 24))),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingMedium),
-                  Text(
-                    userExample.name,
-                    style: const TextStyle(
-                      color: BetFlixColors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    userExample.email,
-                    style: const TextStyle(
-                      color: BetFlixColors.goldYellow,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingMedium),
-                  CoinWidget(
-                    amount: userExample.coins,
-                    isHighlighted: true,
-                  ),
-                ],
+                    );
+                  },
+                ),
               ),
-            ),
-
-            const SizedBox(height: AppConstants.paddingLarge),
-
-            // Estadísticas
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.paddingMedium,
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: provider.isLoading ? null : _saveProfile,
+                  style: ElevatedButton.styleFrom(backgroundColor: BetFlixColors.pinkBright),
+                  icon: const Icon(Icons.save, color: Colors.white),
+                  label: const Text('Guardar perfil', style: TextStyle(color: Colors.white)),
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Estadísticas',
-                    style: BetFlixTextStyles.sectionTitle,
-                  ),
-                  const SizedBox(height: AppConstants.paddingMedium),
-                  GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: 2,
-                    crossAxisSpacing: AppConstants.paddingMedium,
-                    mainAxisSpacing: AppConstants.paddingMedium,
-                    childAspectRatio: 1.2,
-                    children: [
-                      _buildStatCard(
-                        'Nivel',
-                        userExample.level.toString(),
-                        '⭐',
-                        BetFlixColors.goldYellow,
-                      ),
-                      _buildStatCard(
-                        'Racha Actual',
-                        '${userExample.winStreak}',
-                        '🔥',
-                        BetFlixColors.accentRed,
-                      ),
-                      _buildStatCard(
-                        'Total Apuestas',
-                        userExample.totalBets.toString(),
-                        '🎯',
-                        BetFlixColors.primaryBlue,
-                      ),
-                      _buildStatCard(
-                        'Tasa de Acierto',
-                        '${userExample.successRate.toStringAsFixed(0)}%',
-                        '✅',
-                        BetFlixColors.success,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: AppConstants.paddingLarge),
-
-            // Logros
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.paddingMedium,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Logros',
-                    style: BetFlixTextStyles.sectionTitle,
-                  ),
-                  const SizedBox(height: AppConstants.paddingMedium),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: AppConstants.paddingMedium,
-                      mainAxisSpacing: AppConstants.paddingMedium,
-                    ),
-                    itemCount: badges.length,
-                    itemBuilder: (context, index) {
-                      final badge = badges[index];
-                      return BadgeWidget(
-                        icon: badge.unlocked ? '🏅' : '🔒',
-                        title: badge.title,
-                        unlocked: badge.unlocked,
-                        tooltip: badge.description,
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: AppConstants.paddingLarge),
-
-            // Botones de acción
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppConstants.paddingMedium,
-              ),
-              child: Column(
-                children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Historial de apuestas'),
-                          ),
-                        );
-                      },
-                      child: const Text('Ver Historial de Apuestas'),
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingMedium),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Cerrar sesión'),
-                          ),
-                        );
-                      },
-                      child: const Text('Cerrar Sesión'),
-                    ),
-                  ),
-                  const SizedBox(height: AppConstants.paddingLarge),
-                ],
+            ],
+            const SizedBox(height: 20),
+            _statsPanel(user),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _logout,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: BetFlixColors.accentRed),
+                ),
+                icon: const Icon(Icons.logout, color: BetFlixColors.accentRed),
+                label: const Text('Cerrar sesión', style: TextStyle(color: BetFlixColors.accentRed)),
               ),
             ),
           ],
@@ -271,40 +299,71 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     );
   }
 
-  Widget _buildStatCard(String label, String value, String icon, Color color) {
-    return Container(
-      decoration: BoxDecoration(
-        color: BetFlixColors.white,
-        borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-          width: 2,
-        ),
+  Widget _filterChip(String value, String label) {
+    final selected = _avatarFilter == value;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      selectedColor: BetFlixColors.cyanBright,
+      labelStyle: TextStyle(
+        color: selected ? Colors.black : Colors.white,
+        fontWeight: FontWeight.bold,
       ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              icon,
-              style: const TextStyle(fontSize: 28),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: BetFlixTextStyles.subtitle,
-            ),
+      backgroundColor: const Color(0xFF2A2A3E),
+      onSelected: (_) => setState(() => _avatarFilter = value),
+    );
+  }
+
+  Widget _statsPanel(BetFlixUser user) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF23233A),
+            const Color(0xFF17172A),
           ],
         ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Tus estadísticas',
+            style: TextStyle(
+              color: BetFlixColors.cyanBright,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _statRow('Apuestas totales', '${user.totalBets}'),
+          _statRow('Aciertos', '${user.correctBets}'),
+          _statRow('Tasa de acierto', '${user.successRate.toStringAsFixed(1)}%'),
+          _statRow('Racha', '${user.winStreak}'),
+        ],
+      ),
+    );
+  }
+
+  Widget _statRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.white70)),
+          Text(
+            value,
+            style: const TextStyle(
+              color: BetFlixColors.goldYellow,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
       ),
     );
   }

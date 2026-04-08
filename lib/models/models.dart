@@ -21,6 +21,8 @@ class Match {
   final int betsCount;
   final String? seasonId;
   final String? seasonName;
+  final int? roundNumber;
+  final String? phase;
 
   Match({
     required this.id,
@@ -42,6 +44,8 @@ class Match {
     this.betsCount = 0,
     this.seasonId,
     this.seasonName,
+    this.roundNumber,
+    this.phase,
   });
 }
 
@@ -55,6 +59,7 @@ enum MatchStatus {
 enum MatchSource {
   userCreated,
   randomGenerated,
+  tournamentGenerated,
 }
 
 /// Modelo para un usuario
@@ -304,5 +309,21 @@ class NeighborhoodSeason {
     required this.name,
     required this.isActive,
     required this.createdAt,
+  });
+}
+
+class SeasonChampionEntry {
+  final String seasonId;
+  final String seasonName;
+  final String championUserId;
+  final DateTime awardedAt;
+  final int championBonus;
+
+  SeasonChampionEntry({
+    required this.seasonId,
+    required this.seasonName,
+    required this.championUserId,
+    required this.awardedAt,
+    required this.championBonus,
   });
 }

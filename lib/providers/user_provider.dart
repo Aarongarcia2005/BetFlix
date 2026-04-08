@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/models.dart';
 import '../services/auth_service.dart';
 
@@ -24,23 +26,73 @@ class UserProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    _currentUser = BetFlixUser(
-      id: 'demo-${email.hashCode.abs()}',
-      name: name,
-      email: email,
-      profileImageUrl: name.isNotEmpty ? name[0].toUpperCase() : '?',
-      coins: 5000,
-      winStreak: 0,
-      totalBets: 0,
-      correctBets: 0,
-      level: 1,
-      joinDate: DateTime.now(),
-    );
+    try {
+      final auth = FirebaseAuth.instance;
+      User? firebaseUser = auth.currentUser;
 
-    _hasInitializedAuth = true;
-    _isLoading = false;
-    notifyListeners();
-    return true;
+      // En modo demo necesitamos un usuario autenticado en Firebase
+      // para que Firestore permita crear partidos y apuestas.
+      if (firebaseUser == null) {
+        final credential = await auth.signInAnonymously();
+        firebaseUser = credential.user;
+      }
+
+      if (firebaseUser == null) {
+        throw 'No se pudo iniciar sesión demo. Reintenta.';
+      }
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(firebaseUser.uid)
+          .set({
+        'id': firebaseUser.uid,
+        'name': name,
+        'email': email,
+        'coins': 5000,
+        'winStreak': 0,
+        'totalBets': 0,
+        'correctBets': 0,
+        'level': 1,
+        'joinDate': DateTime.now().toIso8601String(),
+        'profileImageUrl': name.isNotEmpty ? name[0].toUpperCase() : '?',
+        'isDemo': true,
+      }, SetOptions(merge: true));
+
+      _currentUser = BetFlixUser(
+        id: firebaseUser.uid,
+        name: name,
+        email: email,
+        profileImageUrl: name.isNotEmpty ? name[0].toUpperCase() : '?',
+        coins: 5000,
+        winStreak: 0,
+        totalBets: 0,
+        correctBets: 0,
+        level: 1,
+        joinDate: DateTime.now(),
+      );
+
+      _hasInitializedAuth = true;
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      final raw = e.toString();
+      if (raw.contains('operation-not-allowed') || raw.contains('admin-restricted-operation')) {
+        _errorMessage =
+            'Activa Anonymous en Firebase Authentication para usar usuarios demo.';
+      } else if (raw.contains('permission-denied')) {
+        _errorMessage =
+            'Firestore bloquea escrituras. Revisa reglas o usa login con cuenta Firebase.';
+      } else {
+        _errorMessage = raw.startsWith('Exception: ')
+            ? raw.replaceFirst('Exception: ', '')
+            : raw;
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
   }
 
   /// Sign Up
@@ -65,9 +117,12 @@ class UserProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       final raw = e.toString();
-      _errorMessage = raw.startsWith('Exception: ')
-          ? raw.replaceFirst('Exception: ', '')
-          : raw;
+      final clean = raw.startsWith('Exception: ')
+        ? raw.replaceFirst('Exception: ', '')
+        : raw;
+      _errorMessage = clean.trim().isEmpty
+        ? 'Registro falló. Revisa Firebase Authentication (Email/Password) y la configuración Web.'
+        : clean;
       _isLoading = false;
       notifyListeners();
       return false;
@@ -133,6 +188,46 @@ class UserProvider extends ChangeNotifier {
       await _authService.updateUserCoins(_currentUser!.id, newCoins);
       _currentUser = _currentUser!.copyWith(coins: newCoins);
       notifyListeners();
+    }
+  }
+
+  Future<bool> updateProfile({
+    required String name,
+    required String profileImageUrl,
+  }) async {
+    if (_currentUser == null) {
+      _errorMessage = 'No hay sesión activa.';
+      notifyListeners();
+      return false;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _authService.updateUserProfile(
+        userId: _currentUser!.id,
+        name: name,
+        profileImageUrl: profileImageUrl,
+      );
+
+      _currentUser = _currentUser!.copyWith(
+        name: name,
+        profileImageUrl: profileImageUrl,
+      );
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      final raw = e.toString();
+      _errorMessage = raw.startsWith('Exception: ')
+          ? raw.replaceFirst('Exception: ', '')
+          : raw;
+      _isLoading = false;
+      notifyListeners();
+      return false;
     }
   }
 

@@ -14,6 +14,7 @@ import 'screens/user_profile_screen.dart';
 import 'screens/create_bet_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/active_bets_screen.dart';
+import 'screens/tournament_center_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,6 +47,7 @@ class MyApp extends StatelessWidget {
           '/challenges': (context) => const ChallengesScreen(),
           '/ranking': (context) => const RankingScreen(),
           '/profile': (context) => const UserProfileScreen(),
+          '/tournament-center': (context) => const TournamentCenterScreen(),
         },
         debugShowCheckedModeBanner: false,
       ),

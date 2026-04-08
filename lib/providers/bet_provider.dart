@@ -97,6 +97,14 @@ class BetProvider extends ChangeNotifier {
     return _betService.getNeighborhoodTournamentTableStream(seasonId: seasonId);
   }
 
+  Stream<List<Match>> getSeasonFixturesStream({required String seasonId}) {
+    return _betService.getSeasonFixturesStream(seasonId: seasonId);
+  }
+
+  Stream<List<SeasonChampionEntry>> getSeasonChampionsHistoryStream() {
+    return _betService.getSeasonChampionsHistoryStream();
+  }
+
   Future<void> seedRandomMatchesIfEmpty() async {
     await _betService.seedRandomMatchesIfEmpty();
   }
@@ -130,6 +138,68 @@ class BetProvider extends ChangeNotifier {
     } catch (e) {
       _errorMessage = e.toString();
       notifyListeners();
+    }
+  }
+
+  Future<bool> generateSeasonSchedule({
+    required String seasonId,
+    required String seasonName,
+    required List<String> teams,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _betService.generateSeasonSchedule(
+        seasonId: seasonId,
+        seasonName: seasonName,
+        teams: teams,
+      );
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<String?> awardSeasonPrizes({required String seasonId}) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final message = await _betService.awardSeasonPrizes(seasonId: seasonId);
+      _isLoading = false;
+      notifyListeners();
+      return message;
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<bool> resolvePlayoffBracketForSeason({required String seasonId}) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _betService.resolvePlayoffBracketForSeason(seasonId: seasonId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
     }
   }
 

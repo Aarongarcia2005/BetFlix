@@ -47,15 +47,19 @@ class _LoginScreenState extends State<LoginScreen> {
       (user) => user['email'] == email && user['password'] == password,
     );
 
-    final success = matchedDemoUsers.isNotEmpty
-        ? await context.read<UserProvider>().signInDemo(
+    bool success = await context.read<UserProvider>().signIn(
+          email: email,
+          password: password,
+        );
+
+    // Para usuarios demo predefinidos, hacemos fallback a demo login
+    // solo si el login email/password real falla.
+    if (!success && matchedDemoUsers.isNotEmpty) {
+      success = await context.read<UserProvider>().signInDemo(
             email: email,
             name: matchedDemoUsers.first['name'] ?? 'Usuario Demo',
-          )
-        : await context.read<UserProvider>().signIn(
-            email: email,
-            password: password,
           );
+    }
 
     setState(() => _isLoading = false);
 

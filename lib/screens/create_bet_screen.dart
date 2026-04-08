@@ -439,7 +439,22 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                 const SizedBox(height: 18),
                 _sectionTitle('2) Elige partido abierto para apostar'),
                 _panel(
-                  child: snapshot.connectionState == ConnectionState.waiting
+                  child: snapshot.hasError
+                      ? Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: BetFlixColors.accentRed.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: BetFlixColors.accentRed.withOpacity(0.6)),
+                          ),
+                          child: Text(
+                            'Error al cargar partidos de Firestore. '
+                            'Suele ser por reglas o índices.\n\nDetalle: ${snapshot.error}',
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        )
+                      : snapshot.connectionState == ConnectionState.waiting
                       ? const Center(
                           child: Padding(
                             padding: EdgeInsets.all(16.0),

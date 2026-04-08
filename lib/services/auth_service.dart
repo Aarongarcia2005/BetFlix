@@ -70,6 +70,7 @@ class AuthService {
           'id': firebaseUser.uid,
           'name': username,
           'email': email,
+          'isDemo': false,
           'coins': 5000,
           'winStreak': 0,
           'totalBets': 0,
@@ -91,13 +92,26 @@ class AuthService {
           throw 'El formato del correo no es válido.';
         case 'weak-password':
           throw 'La contraseña es demasiado débil (mínimo 6 caracteres).';
+        case 'operation-not-allowed':
+          throw 'Email/Password no está habilitado en Firebase Authentication.';
+        case 'invalid-api-key':
+          throw 'API key inválida en Firebase. Revisa firebase_options.dart.';
+        case 'app-not-authorized':
+          throw 'App no autorizada para Firebase. Revisa la configuración Web del proyecto.';
         case 'network-request-failed':
           throw 'Sin conexión. Revisa internet e inténtalo de nuevo.';
+        case 'too-many-requests':
+          throw 'Demasiados intentos. Espera un momento e inténtalo de nuevo.';
         default:
-          throw e.message ?? 'Error en registro';
+          throw (e.message?.isNotEmpty == true)
+              ? '${e.message} (code: ${e.code})'
+              : 'Error en registro (code: ${e.code})';
       }
-    } catch (_) {
-      throw 'No se pudo completar el registro. Inténtalo de nuevo.';
+    } catch (e) {
+      final raw = e.toString();
+      throw raw.startsWith('Exception: ')
+          ? raw.replaceFirst('Exception: ', '')
+          : 'No se pudo completar el registro. Detalle: $raw';
     }
   }
 
@@ -145,6 +159,7 @@ class AuthService {
           'id': fallbackUser.id,
           'name': fallbackUser.name,
           'email': fallbackUser.email,
+          'isDemo': false,
           'coins': fallbackUser.coins,
           'winStreak': fallbackUser.winStreak,
           'totalBets': fallbackUser.totalBets,
@@ -218,6 +233,7 @@ class AuthService {
           'id': fallbackUser.id,
           'name': fallbackUser.name,
           'email': fallbackUser.email,
+          'isDemo': false,
           'coins': fallbackUser.coins,
           'winStreak': fallbackUser.winStreak,
           'totalBets': fallbackUser.totalBets,
@@ -239,5 +255,23 @@ class AuthService {
     await _firestore.collection('users').doc(userId).update({
       'coins': newCoins,
     });
+  }
+
+  /// Actualizar perfil del usuario
+  Future<void> updateUserProfile({
+    required String userId,
+    required String name,
+    required String profileImageUrl,
+  }) async {
+    await _firestore.collection('users').doc(userId).set({
+      'name': name,
+      'profileImageUrl': profileImageUrl,
+      'updatedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
+
+    final user = _auth.currentUser;
+    if (user != null && user.uid == userId && name.trim().isNotEmpty) {
+      await user.updateDisplayName(name.trim());
+    }
   }
 }
