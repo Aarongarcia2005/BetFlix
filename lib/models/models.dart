@@ -13,6 +13,12 @@ class Match {
   final MatchStatus status;
   final String league;
   final bool isLocal; // Si es un equipo local
+  final String? createdByUserId;
+  final String? createdByName;
+  final MatchSource source;
+  final int? shotsOnTargetTotal;
+  final String? firstScoringTeam;
+  final int betsCount;
 
   Match({
     required this.id,
@@ -26,6 +32,12 @@ class Match {
     required this.status,
     required this.league,
     this.isLocal = false,
+    this.createdByUserId,
+    this.createdByName,
+    this.source = MatchSource.randomGenerated,
+    this.shotsOnTargetTotal,
+    this.firstScoringTeam,
+    this.betsCount = 0,
   });
 }
 
@@ -34,6 +46,11 @@ enum MatchStatus {
   live,
   finished,
   cancelled,
+}
+
+enum MatchSource {
+  userCreated,
+  randomGenerated,
 }
 
 /// Modelo para un usuario
@@ -105,6 +122,10 @@ class Bet {
   final String userId;
   final String matchId;
   final BetType betType;
+  final BetMarket market;
+  final String selection;
+  final String? matchTitle;
+  final String? createdByUserId;
   final int amount;
   final double odds;
   final DateTime createdAt;
@@ -116,6 +137,10 @@ class Bet {
     required this.userId,
     required this.matchId,
     required this.betType,
+    this.market = BetMarket.matchWinner,
+    this.selection = '',
+    this.matchTitle,
+    this.createdByUserId,
     required this.amount,
     required this.odds,
     required this.createdAt,
@@ -130,6 +155,14 @@ enum BetType {
   draw,
   over,
   under,
+}
+
+enum BetMarket {
+  matchWinner,
+  firstScoringTeam,
+  overTwoGoals,
+  totalGoals,
+  totalShotsOnTarget,
 }
 
 enum BetStatus {
@@ -230,4 +263,28 @@ class BetFlixBadge {
     required this.icon,
     required this.unlocked,
   });
+}
+
+class NeighborhoodTeamStanding {
+  final String teamName;
+  final int played;
+  final int won;
+  final int draw;
+  final int lost;
+  final int goalsFor;
+  final int goalsAgainst;
+  final int points;
+
+  NeighborhoodTeamStanding({
+    required this.teamName,
+    required this.played,
+    required this.won,
+    required this.draw,
+    required this.lost,
+    required this.goalsFor,
+    required this.goalsAgainst,
+    required this.points,
+  });
+
+  int get goalDifference => goalsFor - goalsAgainst;
 }

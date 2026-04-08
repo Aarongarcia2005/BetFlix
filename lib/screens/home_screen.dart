@@ -239,6 +239,24 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
                 const SizedBox(height: AppConstants.paddingLarge),
 
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.paddingMedium,
+                  ),
+                  child: _trendingFeedSection(),
+                ),
+
+                const SizedBox(height: AppConstants.paddingLarge),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.paddingMedium,
+                  ),
+                  child: _tournamentModeSection(),
+                ),
+
+                const SizedBox(height: AppConstants.paddingLarge),
+
                 // Retos populares
                 Padding(
                   padding: const EdgeInsets.symmetric(
@@ -290,6 +308,197 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
         ],
       ),
+    );
+  }
+
+  Widget _trendingFeedSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Feed Trending',
+          style: TextStyle(
+            color: BetFlixColors.cyanBright,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: AppConstants.paddingMedium),
+        StreamBuilder<List<Match>>(
+          stream: context.watch<BetProvider>().getTrendingMatchesStream(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(color: BetFlixColors.cyanBright),
+              );
+            }
+
+            final matches = snapshot.data ?? const <Match>[];
+            if (matches.isEmpty) {
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF222238),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'Aún no hay partidos en tendencia. Crea y apuesta para activarlo.',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              );
+            }
+
+            return Column(
+              children: matches.take(5).map((match) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFF2B2B42),
+                        const Color(0xFF18182A),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: BetFlixColors.purpleVibrant.withOpacity(0.25)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${match.homeTeam} vs ${match.awayTeam}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${match.betsCount} apuestas • ${match.source == MatchSource.userCreated ? 'Barrio' : 'Open BetFlix'}',
+                              style: const TextStyle(
+                                color: BetFlixColors.cyanBright,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CreateBetScreen(match: match),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: BetFlixColors.pinkBright,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Apostar'),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _tournamentModeSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Modo Torneo de Barrio',
+          style: TextStyle(
+            color: BetFlixColors.orangeVibrant,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: AppConstants.paddingMedium),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF2C233A),
+                const Color(0xFF191726),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: BetFlixColors.orangeVibrant.withOpacity(0.3)),
+          ),
+          child: StreamBuilder<List<NeighborhoodTeamStanding>>(
+            stream: context.watch<BetProvider>().getNeighborhoodTournamentTableStream(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator(color: BetFlixColors.orangeVibrant),
+                );
+              }
+
+              final table = snapshot.data ?? const <NeighborhoodTeamStanding>[];
+              if (table.isEmpty) {
+                return const Text(
+                  'Finaliza partidos personalizados para generar la clasificación del torneo.',
+                  style: TextStyle(color: Colors.white70),
+                );
+              }
+
+              return Column(
+                children: [
+                  const Row(
+                    children: [
+                      Expanded(flex: 4, child: Text('Equipo', style: TextStyle(color: BetFlixColors.cyanBright, fontWeight: FontWeight.bold))),
+                      Expanded(child: Text('PJ', textAlign: TextAlign.center, style: TextStyle(color: BetFlixColors.cyanBright, fontWeight: FontWeight.bold))),
+                      Expanded(child: Text('DG', textAlign: TextAlign.center, style: TextStyle(color: BetFlixColors.cyanBright, fontWeight: FontWeight.bold))),
+                      Expanded(child: Text('Pts', textAlign: TextAlign.center, style: TextStyle(color: BetFlixColors.goldYellow, fontWeight: FontWeight.bold))),
+                    ],
+                  ),
+                  const Divider(color: Colors.white24),
+                  ...table.take(6).map((entry) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 4,
+                            child: Text(
+                              entry.teamName,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          Expanded(
+                            child: Text('${entry.played}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+                          ),
+                          Expanded(
+                            child: Text('${entry.goalDifference}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+                          ),
+                          Expanded(
+                            child: Text('${entry.points}', textAlign: TextAlign.center, style: const TextStyle(color: BetFlixColors.goldYellow, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

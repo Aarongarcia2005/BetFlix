@@ -34,6 +34,10 @@ class BetProvider extends ChangeNotifier {
     required String userId,
     required String matchId,
     required BetType betType,
+    BetMarket market = BetMarket.matchWinner,
+    String selection = '',
+    String? matchTitle,
+    String? createdByUserId,
     required int amount,
     required double odds,
   }) async {
@@ -46,6 +50,10 @@ class BetProvider extends ChangeNotifier {
         userId: userId,
         matchId: matchId,
         betType: betType,
+        market: market,
+        selection: selection,
+        matchTitle: matchTitle,
+        createdByUserId: createdByUserId,
         amount: amount,
         odds: odds,
       );
@@ -69,6 +77,88 @@ class BetProvider extends ChangeNotifier {
   /// Get ranking stream
   Stream<List<RankingEntry>> getRankingStream() {
     return _betService.getRankingStream();
+  }
+
+  Stream<List<Match>> getOpenMatchesStream() {
+    return _betService.getOpenMatchesStream();
+  }
+
+  Stream<List<Match>> getTrendingMatchesStream() {
+    return _betService.getTrendingMatchesStream();
+  }
+
+  Stream<List<NeighborhoodTeamStanding>> getNeighborhoodTournamentTableStream() {
+    return _betService.getNeighborhoodTournamentTableStream();
+  }
+
+  Future<void> seedRandomMatchesIfEmpty() async {
+    await _betService.seedRandomMatchesIfEmpty();
+  }
+
+  Future<String?> createCustomMatch({
+    required String ownerUserId,
+    required String ownerName,
+    required String homeTeam,
+    required String awayTeam,
+    required String league,
+    required DateTime kickoff,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final id = await _betService.createCustomMatch(
+        ownerUserId: ownerUserId,
+        ownerName: ownerName,
+        homeTeam: homeTeam,
+        awayTeam: awayTeam,
+        league: league,
+        kickoff: kickoff,
+      );
+      _isLoading = false;
+      notifyListeners();
+      return id;
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<bool> updateCustomMatchStats({
+    required String matchId,
+    required String ownerUserId,
+    required int homeScore,
+    required int awayScore,
+    required int shotsOnTargetTotal,
+    required String firstScoringTeam,
+    required MatchStatus status,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _betService.updateCustomMatchStats(
+        matchId: matchId,
+        ownerUserId: ownerUserId,
+        homeScore: homeScore,
+        awayScore: awayScore,
+        shotsOnTargetTotal: shotsOnTargetTotal,
+        firstScoringTeam: firstScoringTeam,
+        status: status,
+      );
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
   }
 
   /// Resolver apuestas de un partido

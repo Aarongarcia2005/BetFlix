@@ -121,8 +121,25 @@ class _BetCard extends StatelessWidget {
       case BetStatus.lost:
         return '✗ Perdida';
       case BetStatus.pending:
-        return '⏳ Pendiente';      case BetStatus.voided:      case BetStatus.cancelled:
+        return '⏳ Pendiente';
+      case BetStatus.voided:
+      case BetStatus.cancelled:
         return 'Cancelada';
+    }
+  }
+
+  String _marketLabel(BetMarket market) {
+    switch (market) {
+      case BetMarket.matchWinner:
+        return 'Ganador';
+      case BetMarket.firstScoringTeam:
+        return 'Primer gol';
+      case BetMarket.overTwoGoals:
+        return 'Más de 2 goles';
+      case BetMarket.totalGoals:
+        return 'Total goles';
+      case BetMarket.totalShotsOnTarget:
+        return 'Chutes a puerta';
     }
   }
 
@@ -150,7 +167,9 @@ class _BetCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Apuesta #${bet.id.substring(0, 8)}',
+                      bet.matchTitle?.isNotEmpty == true
+                          ? bet.matchTitle!
+                          : 'Apuesta #${bet.id.substring(0, 8)}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -272,15 +291,40 @@ class _BetCard extends StatelessWidget {
               color: Colors.white.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text(
-              'Tipo: ${bet.betType.toString().split('.').last.toUpperCase()}',
-              style: const TextStyle(
-                color: BetFlixColors.pinkBright,
-                fontWeight: FontWeight.w500,
-                fontSize: 12,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Mercado: ${_marketLabel(bet.market)}',
+                  style: const TextStyle(
+                    color: BetFlixColors.pinkBright,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Selección: ${bet.selection.isEmpty ? bet.betType.name : bet.selection}',
+                  style: const TextStyle(
+                    color: BetFlixColors.cyanBright,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ),
+          if (bet.createdByUserId != null && bet.createdByUserId!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Partido creado por: ${bet.createdByUserId == 'system' ? 'BetFlix Engine' : bet.createdByUserId}',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.65),
+                  fontSize: 11,
+                ),
+              ),
+            ),
           const SizedBox(height: 12),
 
           // Action Buttons
