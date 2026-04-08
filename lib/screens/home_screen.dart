@@ -88,8 +88,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
     return Scaffold(
       backgroundColor: BetFlixColors.background,
-      body: CustomScrollView(
-        slivers: [
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: BetFlixColors.pageGradient,
+          ),
+        ),
+        child: CustomScrollView(
+          slivers: [
           // Header profesional
           SliverAppBar(
             expandedHeight: 200,
@@ -114,7 +122,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 const SizedBox(height: AppConstants.paddingMedium),
 
                 // Sección de partidos locales
-                Padding(
+                _sectionReveal(
+                  Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppConstants.paddingMedium,
                   ),
@@ -146,6 +155,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       const SizedBox(height: AppConstants.paddingMedium),
                     ],
                   ),
+                ),
                 ),
 
                 // Tarjetas de partidos locales
@@ -195,32 +205,24 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: AppConstants.paddingMedium),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
                     children: [
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: BetFlixColors.pinkBright,
-                          foregroundColor: Colors.black,
-                        ),
+                      _quickActionButton(
+                        color: BetFlixColors.pinkBright,
                         onPressed: _loadRandomMatches,
                         icon: const Icon(Icons.refresh, size: 20),
-                        label: const Text('Refrescar Partidos'),
+                        label: 'Refrescar Partidos',
                       ),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: BetFlixColors.cyanBright,
-                          foregroundColor: Colors.black,
-                        ),
+                      _quickActionButton(
+                        color: BetFlixColors.cyanBright,
                         onPressed: _simulateMatchResults,
                         icon: const Icon(Icons.sports_soccer, size: 20),
-                        label: const Text('Simular Resultados'),
+                        label: 'Simular Resultados',
                       ),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: BetFlixColors.orangeVibrant,
-                          foregroundColor: Colors.black,
-                        ),
+                      _quickActionButton(
+                        color: BetFlixColors.orangeVibrant,
                         onPressed: () async {
                           final user = context.read<UserProvider>().currentUser;
                           if (user == null || localMatches.isEmpty) {
@@ -243,7 +245,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           );
                         },
                         icon: const Icon(Icons.auto_awesome, size: 20),
-                        label: const Text('Apuesta Random'),
+                        label: 'Apuesta Random',
                       ),
                     ],
                   ),
@@ -251,26 +253,26 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
                 const SizedBox(height: AppConstants.paddingLarge),
 
-                Padding(
+                _sectionReveal(Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppConstants.paddingMedium,
                   ),
                   child: _trendingFeedSection(),
-                ),
+                )),
 
                 const SizedBox(height: AppConstants.paddingLarge),
 
-                Padding(
+                _sectionReveal(Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppConstants.paddingMedium,
                   ),
                   child: _tournamentModeSection(),
-                ),
+                )),
 
                 const SizedBox(height: AppConstants.paddingLarge),
 
                 // Retos populares
-                Padding(
+                _sectionReveal(Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppConstants.paddingMedium,
                   ),
@@ -312,13 +314,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                     ],
                   ),
-                ),
+                )),
 
                 const SizedBox(height: AppConstants.paddingLarge),
               ],
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -362,8 +365,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             }
 
             return Column(
-              children: matches.take(5).map((match) {
-                return Container(
+              children: matches.take(5).toList().asMap().entries.map((entry) {
+                final index = entry.key;
+                final match = entry.value;
+                return TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: Duration(milliseconds: 320 + (index * 60)),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, _) {
+                    return Transform.translate(
+                      offset: Offset(0, 14 * (1 - value)),
+                      child: Opacity(
+                        opacity: value,
+                        child: Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -417,6 +431,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                     ],
                   ),
+                        ),
+                      ),
+                    );
+                  },
                 );
               }).toList(),
             );
@@ -745,6 +763,40 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       SnackBar(
         content: Text(message ?? error ?? 'No se pudieron aplicar premios de temporada.'),
       ),
+    );
+  }
+
+  Widget _sectionReveal(Widget child) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: AppConstants.animationDurationMedium,
+      curve: Curves.easeOutCubic,
+      builder: (context, value, _) {
+        return Transform.translate(
+          offset: Offset(0, 16 * (1 - value)),
+          child: Opacity(opacity: value, child: child),
+        );
+      },
+    );
+  }
+
+  Widget _quickActionButton({
+    required Color color,
+    required VoidCallback onPressed,
+    required Icon icon,
+    required String label,
+  }) {
+    return ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.black,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      onPressed: onPressed,
+      icon: icon,
+      label: Text(label),
     );
   }
 }

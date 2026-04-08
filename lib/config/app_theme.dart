@@ -247,12 +247,107 @@ class AppTheme {
   static ThemeData get darkTheme {
     return ThemeData(
       colorScheme: ColorScheme.dark(
-        primary: BetFlixColors.primaryBlueLight,
-        secondary: BetFlixColors.accentRed,
+        primary: BetFlixColors.cyanBright,
+        secondary: BetFlixColors.pinkBright,
         tertiary: BetFlixColors.goldYellow,
-        surface: BetFlixColors.darkGrey,
-        background: BetFlixColors.black,
+        surface: BetFlixColors.surfaceCard,
+        background: BetFlixColors.background,
         error: BetFlixColors.error,
+        outline: BetFlixColors.borderLight,
+      ),
+      scaffoldBackgroundColor: BetFlixColors.background,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        titleTextStyle: TextStyle(
+          color: Colors.white,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.4,
+        ),
+      ),
+      cardTheme: CardThemeData(
+        color: BetFlixColors.surfaceCard,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: BetFlixColors.borderLight.withOpacity(0.35)),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: BetFlixColors.pinkBright,
+          foregroundColor: Colors.white,
+          minimumSize: const Size.fromHeight(50),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: BetFlixColors.cyanBright,
+          minimumSize: const Size.fromHeight(48),
+          side: BorderSide(color: BetFlixColors.cyanBright.withOpacity(0.8), width: 1.3),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: BetFlixColors.surfaceCardElevated,
+        hintStyle: const TextStyle(color: Colors.white54),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: BetFlixColors.borderLight.withOpacity(0.4)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: BetFlixColors.borderLight.withOpacity(0.45)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: BetFlixColors.cyanBright, width: 2),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: BetFlixColors.surfaceCardElevated,
+        disabledColor: BetFlixColors.surfaceCard,
+        selectedColor: BetFlixColors.cyanBright,
+        secondarySelectedColor: BetFlixColors.pinkBright,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        labelStyle: const TextStyle(fontWeight: FontWeight.w700),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: BetFlixColors.surfaceCardElevated,
+        contentTextStyle: const TextStyle(color: Colors.white),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      textTheme: const TextTheme(
+        displaySmall: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        headlineSmall: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        titleLarge: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        titleMedium: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        bodyLarge: TextStyle(color: Colors.white),
+        bodyMedium: TextStyle(color: Colors.white70),
+        labelLarge: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
       ),
       useMaterial3: true,
       brightness: Brightness.dark,

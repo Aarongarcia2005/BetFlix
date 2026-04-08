@@ -41,7 +41,15 @@ class _ActiveBetsScreenState extends State<ActiveBetsScreen> {
         ),
         centerTitle: true,
       ),
-      body: Consumer2<UserProvider, BetProvider>(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: BetFlixColors.pageGradient,
+          ),
+        ),
+        child: Consumer2<UserProvider, BetProvider>(
         builder: (context, userProvider, betProvider, _) {
           if (betProvider.isLoading) {
             return const Center(
@@ -81,16 +89,51 @@ class _ActiveBetsScreenState extends State<ActiveBetsScreen> {
             );
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: betProvider.userBets.length,
-            itemBuilder: (context, index) {
-              final bet = betProvider.userBets[index];
-              return _BetCard(bet: bet);
+          return RefreshIndicator(
+            color: BetFlixColors.cyanBright,
+            onRefresh: () async {
+              final userId = userProvider.currentUser?.id;
+              if (userId != null) {
+                await betProvider.loadUserBets(userId);
+              }
             },
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: betProvider.userBets.length,
+              itemBuilder: (context, index) {
+                final bet = betProvider.userBets[index];
+                return _AnimatedBetCard(
+                  delayMs: 65 * index,
+                  child: _BetCard(bet: bet),
+                );
+              },
+            ),
           );
         },
       ),
+      ),
+    );
+  }
+}
+
+class _AnimatedBetCard extends StatelessWidget {
+  final Widget child;
+  final int delayMs;
+
+  const _AnimatedBetCard({required this.child, required this.delayMs});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 360 + delayMs),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, _) {
+        return Transform.translate(
+          offset: Offset(0, 16 * (1 - value)),
+          child: Opacity(opacity: value, child: child),
+        );
+      },
     );
   }
 }
@@ -149,11 +192,22 @@ class _BetCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: BetFlixColors.vibrantGradientLinear,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: BetFlixColors.cardGradient,
+        ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: BetFlixColors.pinkBright.withOpacity(0.3),
+          color: BetFlixColors.cyanBright.withOpacity(0.2),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: BetFlixColors.black.withOpacity(0.2),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -90,14 +90,28 @@ class _LoginScreenState extends State<LoginScreen> {
             end: Alignment.bottomRight,
             colors: [
               BetFlixColors.background,
-              const Color(0xFF1A1A2E),
+              BetFlixColors.surfaceCard,
             ],
           ),
         ),
         child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      BetFlixColors.surfaceCardElevated.withOpacity(0.9),
+                      BetFlixColors.surfaceCard.withOpacity(0.92),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.2)),
+                ),
+                child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Logo/Header
@@ -222,9 +236,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.3)),
+                    border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.35)),
                     borderRadius: BorderRadius.circular(12),
-                    color: const Color(0xFF2A2A3E).withOpacity(0.5),
+                    color: const Color(0xFF2A2A3E).withOpacity(0.35),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,6 +333,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ],
+            ),
+              ),
             ),
           ),
         ),

@@ -29,12 +29,42 @@ class UserProvider extends ChangeNotifier {
     try {
       final auth = FirebaseAuth.instance;
       User? firebaseUser = auth.currentUser;
+      const demoFallbackPassword = 'BetFlixDemo#2026';
 
       // En modo demo necesitamos un usuario autenticado en Firebase
       // para que Firestore permita crear partidos y apuestas.
       if (firebaseUser == null) {
-        final credential = await auth.signInAnonymously();
-        firebaseUser = credential.user;
+        try {
+          final credential = await auth.signInAnonymously();
+          firebaseUser = credential.user;
+        } on FirebaseAuthException catch (e) {
+          // Si Anonymous está deshabilitado en Firebase,
+          // hacemos fallback automático a Email/Password demo.
+          if (e.code == 'operation-not-allowed' ||
+              e.code == 'admin-restricted-operation') {
+            try {
+              final demoLogin = await auth.signInWithEmailAndPassword(
+                email: email,
+                password: demoFallbackPassword,
+              );
+              firebaseUser = demoLogin.user;
+            } on FirebaseAuthException catch (loginError) {
+              if (loginError.code == 'user-not-found' ||
+                  loginError.code == 'invalid-credential') {
+                final demoRegister = await auth.createUserWithEmailAndPassword(
+                  email: email,
+                  password: demoFallbackPassword,
+                );
+                firebaseUser = demoRegister.user;
+                await firebaseUser?.updateDisplayName(name);
+              } else {
+                rethrow;
+              }
+            }
+          } else {
+            rethrow;
+          }
+        }
       }
 
       if (firebaseUser == null) {
@@ -77,9 +107,10 @@ class UserProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       final raw = e.toString();
-      if (raw.contains('operation-not-allowed') || raw.contains('admin-restricted-operation')) {
+      if (raw.contains('operation-not-allowed') ||
+          raw.contains('admin-restricted-operation')) {
         _errorMessage =
-            'Activa Anonymous en Firebase Authentication para usar usuarios demo.';
+            'No se pudo autenticar el usuario demo. Activa Anonymous o Email/Password en Firebase Authentication.';
       } else if (raw.contains('permission-denied')) {
         _errorMessage =
             'Firestore bloquea escrituras. Revisa reglas o usa login con cuenta Firebase.';

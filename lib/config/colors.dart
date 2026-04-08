@@ -38,6 +38,9 @@ class BetFlixColors {
   static const Color background = Color(0xFF0F0F1E); // Azul marino oscuro
   static const Color surfaceLight = Color(0xFF1A1A2E); // Gris-azul oscuro
   static const Color surfaceDark = Color(0xFF16213E); // Azul marino más oscuro
+  static const Color surfaceCard = Color(0xFF14192B);
+  static const Color surfaceCardElevated = Color(0xFF1B2340);
+  static const Color slateBlue = Color(0xFF243B66);
 
   // Bordes
   static const Color borderLight = Color(0xFF3A4A6A);
@@ -47,6 +50,10 @@ class BetFlixColors {
   static const List<Color> primaryGradient = [primaryBlue, primaryBlueDark];
   static const List<Color> successGradient = [success, Color(0xFF059669)];
   static const List<Color> premiumGradient = [goldYellow, Color(0xFFFFA500)];
+  static const List<Color> pageGradient = [Color(0xFF060913), Color(0xFF0F1430), Color(0xFF131A3E)];
+  static const List<Color> cardGradient = [Color(0xFF1A2240), Color(0xFF141B33)];
+  static const List<Color> ctaGradient = [Color(0xFFFF006E), Color(0xFFFF4D00)];
+  static const List<Color> sportsbookGradient = [Color(0xFF00D9FF), Color(0xFF39FF14)];
   static const LinearGradient purpleGradientLinear = LinearGradient(
     colors: [purpleVibrant, pinkBright],
   );

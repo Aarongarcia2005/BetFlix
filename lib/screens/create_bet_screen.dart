@@ -387,13 +387,27 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
             _selectedOption = options.first;
           }
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(AppConstants.paddingMedium),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sectionTitle('1) Crea tu partido del barrio'),
-                _panel(
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: BetFlixColors.pageGradient,
+              ),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppConstants.paddingMedium),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1024),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                _reveal(
+                  _sectionTitle('1) Crea tu partido del barrio'),
+                ),
+                _reveal(
+                  _panel(
                   child: Column(
                     children: [
                       _textInput(_homeTeamController, 'Equipo local'),
@@ -436,9 +450,10 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                     ],
                   ),
                 ),
+                ),
                 const SizedBox(height: 18),
-                _sectionTitle('2) Elige partido abierto para apostar'),
-                _panel(
+                _reveal(_sectionTitle('2) Elige partido abierto para apostar')),
+                _reveal(_panel(
                   child: snapshot.hasError
                       ? Container(
                           width: double.infinity,
@@ -533,14 +548,14 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                                 );
                               }).toList(),
                             ),
-                ),
+                )),
                 const SizedBox(height: 18),
                 if (selectedMatch != null && user != null && selectedMatch.createdByUserId == user.id)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _sectionTitle('3) Panel del creador (control del partido)'),
-                      _panel(
+                      _reveal(_sectionTitle('3) Panel del creador (control del partido)')),
+                      _reveal(_panel(
                         child: Column(
                           children: [
                             Row(
@@ -635,12 +650,12 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                             ),
                           ],
                         ),
-                      ),
+                      )),
                       const SizedBox(height: 18),
                     ],
                   ),
-                _sectionTitle('4) Mercados avanzados para apostar'),
-                _panel(
+                _reveal(_sectionTitle('4) Mercados avanzados para apostar')),
+                _reveal(_panel(
                   child: selectedMatch == null
                       ? const Text('Selecciona un partido para habilitar mercados.', style: TextStyle(color: Colors.white70))
                       : Column(
@@ -725,8 +740,11 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                             ),
                           ],
                         ),
-                ),
+                )),
               ],
+                  ),
+                ),
+              ),
             ),
           );
         },
@@ -751,18 +769,36 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
   Widget _panel({required Widget child}) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            const Color(0xFF24243A),
-            const Color(0xFF17172A),
-          ],
+          colors: BetFlixColors.cardGradient,
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: BetFlixColors.purpleVibrant.withOpacity(0.25)),
+        border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.16)),
+        boxShadow: [
+          BoxShadow(
+            color: BetFlixColors.black.withOpacity(0.22),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: child,
+    );
+  }
+
+  Widget _reveal(Widget child) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: AppConstants.animationDurationMedium,
+      curve: Curves.easeOutCubic,
+      builder: (context, value, _) {
+        return Transform.translate(
+          offset: Offset(0, 14 * (1 - value)),
+          child: Opacity(opacity: value, child: child),
+        );
+      },
     );
   }
 

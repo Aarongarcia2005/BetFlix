@@ -101,14 +101,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
             end: Alignment.bottomRight,
             colors: [
               BetFlixColors.background,
-              const Color(0xFF1A1A2E),
+              BetFlixColors.surfaceCard,
             ],
           ),
         ),
         child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      BetFlixColors.surfaceCardElevated.withOpacity(0.9),
+                      BetFlixColors.surfaceCard.withOpacity(0.92),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.2)),
+                ),
+                child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Back Button
@@ -306,6 +320,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ],
+            ),
+              ),
             ),
           ),
         ),
