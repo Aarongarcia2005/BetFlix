@@ -8,6 +8,84 @@ class BetService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  Future<NeighborhoodSeason> _getOrCreateActiveSeason() async {
+    final activeSnapshot = await _firestore
+        .collection('seasons')
+        .where('isActive', isEqualTo: true)
+        .limit(1)
+        .get();
+
+    if (activeSnapshot.docs.isNotEmpty) {
+      final doc = activeSnapshot.docs.first;
+      final data = doc.data();
+      return NeighborhoodSeason(
+        id: doc.id,
+        name: data['name'] ?? 'Temporada Actual',
+        isActive: data['isActive'] ?? true,
+        createdAt: _parseDateTime(data['createdAt']),
+      );
+    }
+
+    final now = DateTime.now();
+    final name = 'Temporada ${now.year}-${now.month.toString().padLeft(2, '0')}';
+    final docRef = await _firestore.collection('seasons').add({
+      'name': name,
+      'isActive': true,
+      'createdAt': now.toIso8601String(),
+    });
+
+    return NeighborhoodSeason(
+      id: docRef.id,
+      name: name,
+      isActive: true,
+      createdAt: now,
+    );
+  }
+
+  Future<void> ensureActiveSeason() async {
+    await _getOrCreateActiveSeason();
+  }
+
+  Stream<NeighborhoodSeason?> getActiveSeasonStream() {
+    return _firestore
+        .collection('seasons')
+        .where('isActive', isEqualTo: true)
+        .limit(1)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.docs.isEmpty) return null;
+      final doc = snapshot.docs.first;
+      final data = doc.data();
+      return NeighborhoodSeason(
+        id: doc.id,
+        name: data['name'] ?? 'Temporada Actual',
+        isActive: data['isActive'] ?? true,
+        createdAt: _parseDateTime(data['createdAt']),
+      );
+    });
+  }
+
+  Future<void> startNewSeason({required String seasonName}) async {
+    final batch = _firestore.batch();
+    final activeSnapshot = await _firestore
+        .collection('seasons')
+        .where('isActive', isEqualTo: true)
+        .get();
+
+    for (final doc in activeSnapshot.docs) {
+      batch.update(doc.reference, {'isActive': false});
+    }
+
+    final newSeasonRef = _firestore.collection('seasons').doc();
+    batch.set(newSeasonRef, {
+      'name': seasonName,
+      'isActive': true,
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+
+    await batch.commit();
+  }
+
   DateTime _parseDateTime(dynamic value) {
     if (value is Timestamp) return value.toDate();
     if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
@@ -71,6 +149,8 @@ class BetService {
       shotsOnTargetTotal: data['shotsOnTargetTotal'] as int?,
       firstScoringTeam: data['firstScoringTeam'] as String?,
       betsCount: (data['betsCount'] as int?) ?? 0,
+      seasonId: data['seasonId'] as String?,
+      seasonName: data['seasonName'] as String?,
     );
   }
 
@@ -83,6 +163,7 @@ class BetService {
     required DateTime kickoff,
   }) async {
     try {
+      final activeSeason = await _getOrCreateActiveSeason();
       final docRef = await _firestore.collection('matches').add({
         'homeTeam': homeTeam,
         'awayTeam': awayTeam,
@@ -100,6 +181,8 @@ class BetService {
         'createdByName': ownerName,
         'source': MatchSource.userCreated.name,
         'betsCount': 0,
+        'seasonId': activeSeason.id,
+        'seasonName': activeSeason.name,
         'createdAt': DateTime.now().toIso8601String(),
       });
       return docRef.id;
@@ -121,9 +204,11 @@ class BetService {
   }
 
   Future<void> seedRandomMatchesIfEmpty() async {
+    final activeSeason = await _getOrCreateActiveSeason();
     final existing = await _firestore
         .collection('matches')
         .where('source', isEqualTo: MatchSource.randomGenerated.name)
+      .where('seasonId', isEqualTo: activeSeason.id)
         .limit(1)
         .get();
     if (existing.docs.isNotEmpty) return;
@@ -166,8 +251,70 @@ class BetService {
         'createdByName': 'BetFlix Engine',
         'source': MatchSource.randomGenerated.name,
         'betsCount': 0,
+        'seasonId': activeSeason.id,
+        'seasonName': activeSeason.name,
         'createdAt': DateTime.now().toIso8601String(),
       });
+    }
+  }
+
+  Future<void> autoCloseExpiredMatches({
+    Duration gracePeriod = const Duration(minutes: 110),
+  }) async {
+    final threshold = DateTime.now().subtract(gracePeriod).toIso8601String();
+    final snapshot = await _firestore
+        .collection('matches')
+        .where('status', whereIn: [
+          MatchStatus.scheduled.name,
+          MatchStatus.live.name,
+        ])
+        .where('dateTime', isLessThanOrEqualTo: threshold)
+        .get();
+
+    if (snapshot.docs.isEmpty) return;
+
+    final random = Random();
+    for (final doc in snapshot.docs) {
+      final match = _matchFromDoc(doc);
+      final homeScore = match.homeScore ?? random.nextInt(5);
+      final awayScore = match.awayScore ?? random.nextInt(5);
+      final shots = match.shotsOnTargetTotal ?? (5 + random.nextInt(10));
+      final firstScorer = (match.firstScoringTeam == null || match.firstScoringTeam!.isEmpty)
+          ? (random.nextBool() ? match.homeTeam : match.awayTeam)
+          : match.firstScoringTeam!;
+
+      await doc.reference.update({
+        'homeScore': homeScore,
+        'awayScore': awayScore,
+        'shotsOnTargetTotal': shots,
+        'firstScoringTeam': firstScorer,
+        'status': MatchStatus.finished.name,
+        'autoClosedAt': DateTime.now().toIso8601String(),
+      });
+
+      await resolveBetsForMatch(
+        match: Match(
+          id: match.id,
+          homeTeam: match.homeTeam,
+          awayTeam: match.awayTeam,
+          homeTeamLogo: match.homeTeamLogo,
+          awayTeamLogo: match.awayTeamLogo,
+          dateTime: match.dateTime,
+          status: MatchStatus.finished,
+          league: match.league,
+          isLocal: match.isLocal,
+          homeScore: homeScore,
+          awayScore: awayScore,
+          createdByUserId: match.createdByUserId,
+          createdByName: match.createdByName,
+          source: match.source,
+          shotsOnTargetTotal: shots,
+          firstScoringTeam: firstScorer,
+          betsCount: match.betsCount,
+          seasonId: match.seasonId,
+          seasonName: match.seasonName,
+        ),
+      );
     }
   }
 
@@ -220,6 +367,8 @@ class BetService {
         shotsOnTargetTotal: shotsOnTargetTotal,
         firstScoringTeam: firstScoringTeam,
         betsCount: (data['betsCount'] as int?) ?? 0,
+        seasonId: data['seasonId'] as String?,
+        seasonName: data['seasonName'] as String?,
       );
       await resolveBetsForMatch(match: updatedMatch);
     }
@@ -281,11 +430,14 @@ class BetService {
         .map((snapshot) => snapshot.docs.map(_matchFromDoc).toList());
   }
 
-  Stream<List<NeighborhoodTeamStanding>> getNeighborhoodTournamentTableStream() {
+  Stream<List<NeighborhoodTeamStanding>> getNeighborhoodTournamentTableStream({
+    required String seasonId,
+  }) {
     return _firestore
         .collection('matches')
         .where('source', isEqualTo: MatchSource.userCreated.name)
         .where('status', isEqualTo: MatchStatus.finished.name)
+        .where('seasonId', isEqualTo: seasonId)
         .snapshots()
         .map((snapshot) {
       final Map<String, _TeamAccumulator> table = {};

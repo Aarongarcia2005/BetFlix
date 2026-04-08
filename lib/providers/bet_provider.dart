@@ -87,12 +87,50 @@ class BetProvider extends ChangeNotifier {
     return _betService.getTrendingMatchesStream();
   }
 
-  Stream<List<NeighborhoodTeamStanding>> getNeighborhoodTournamentTableStream() {
-    return _betService.getNeighborhoodTournamentTableStream();
+  Stream<NeighborhoodSeason?> getActiveSeasonStream() {
+    return _betService.getActiveSeasonStream();
+  }
+
+  Stream<List<NeighborhoodTeamStanding>> getNeighborhoodTournamentTableStream({
+    required String seasonId,
+  }) {
+    return _betService.getNeighborhoodTournamentTableStream(seasonId: seasonId);
   }
 
   Future<void> seedRandomMatchesIfEmpty() async {
     await _betService.seedRandomMatchesIfEmpty();
+  }
+
+  Future<void> ensureActiveSeason() async {
+    await _betService.ensureActiveSeason();
+  }
+
+  Future<bool> startNewSeason({required String seasonName}) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _betService.startNewSeason(seasonName: seasonName);
+      await _betService.seedRandomMatchesIfEmpty();
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<void> autoCloseExpiredMatches() async {
+    try {
+      await _betService.autoCloseExpiredMatches();
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+    }
   }
 
   Future<String?> createCustomMatch({

@@ -19,6 +19,8 @@ class Match {
   final int? shotsOnTargetTotal;
   final String? firstScoringTeam;
   final int betsCount;
+  final String? seasonId;
+  final String? seasonName;
 
   Match({
     required this.id,
@@ -38,6 +40,8 @@ class Match {
     this.shotsOnTargetTotal,
     this.firstScoringTeam,
     this.betsCount = 0,
+    this.seasonId,
+    this.seasonName,
   });
 }
 
@@ -287,4 +291,18 @@ class NeighborhoodTeamStanding {
   });
 
   int get goalDifference => goalsFor - goalsAgainst;
+}
+
+class NeighborhoodSeason {
+  final String id;
+  final String name;
+  final bool isActive;
+  final DateTime createdAt;
+
+  NeighborhoodSeason({
+    required this.id,
+    required this.name,
+    required this.isActive,
+    required this.createdAt,
+  });
 }

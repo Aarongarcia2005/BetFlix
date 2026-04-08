@@ -29,15 +29,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   late Timer _simulationTimer;
   List<Match> localMatches = [];
   List<Match> allMatches = [];
+  final TextEditingController _newSeasonController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadRandomMatches();
+    Future.microtask(() async {
+      await context.read<BetProvider>().ensureActiveSeason();
+      await context.read<BetProvider>().seedRandomMatchesIfEmpty();
+      await context.read<BetProvider>().autoCloseExpiredMatches();
+    });
 
     _simulationTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       _simulateMatchResults();
+      context.read<BetProvider>().autoCloseExpiredMatches();
     });
   }
 
@@ -67,6 +74,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void dispose() {
     _simulationTimer.cancel();
     _tabController.dispose();
+    _newSeasonController.dispose();
     super.dispose();
   }
 
@@ -415,90 +423,166 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _tournamentModeSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Modo Torneo de Barrio',
-          style: TextStyle(
-            color: BetFlixColors.orangeVibrant,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: AppConstants.paddingMedium),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFF2C233A),
-                const Color(0xFF191726),
+    return StreamBuilder<NeighborhoodSeason?>(
+      stream: context.watch<BetProvider>().getActiveSeasonStream(),
+      builder: (context, seasonSnapshot) {
+        final season = seasonSnapshot.data;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Modo Torneo de Barrio',
+                  style: TextStyle(
+                    color: BetFlixColors.orangeVibrant,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _createSeasonDialog,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: BetFlixColors.orangeVibrant),
+                  ),
+                  icon: const Icon(Icons.add, color: BetFlixColors.orangeVibrant, size: 16),
+                  label: const Text(
+                    'Nueva temporada',
+                    style: TextStyle(color: BetFlixColors.orangeVibrant),
+                  ),
+                ),
               ],
             ),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: BetFlixColors.orangeVibrant.withOpacity(0.3)),
-          ),
-          child: StreamBuilder<List<NeighborhoodTeamStanding>>(
-            stream: context.watch<BetProvider>().getNeighborhoodTournamentTableStream(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: CircularProgressIndicator(color: BetFlixColors.orangeVibrant),
-                );
-              }
+            const SizedBox(height: 6),
+            Text(
+              season == null ? 'Cargando temporada...' : 'Activa: ${season.name}',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: AppConstants.paddingMedium),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF2C233A),
+                    const Color(0xFF191726),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: BetFlixColors.orangeVibrant.withOpacity(0.3)),
+              ),
+              child: season == null
+                  ? const Center(
+                      child: CircularProgressIndicator(color: BetFlixColors.orangeVibrant),
+                    )
+                  : StreamBuilder<List<NeighborhoodTeamStanding>>(
+                      stream: context
+                          .watch<BetProvider>()
+                          .getNeighborhoodTournamentTableStream(seasonId: season.id),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(color: BetFlixColors.orangeVibrant),
+                          );
+                        }
 
-              final table = snapshot.data ?? const <NeighborhoodTeamStanding>[];
-              if (table.isEmpty) {
-                return const Text(
-                  'Finaliza partidos personalizados para generar la clasificación del torneo.',
-                  style: TextStyle(color: Colors.white70),
-                );
-              }
+                        final table = snapshot.data ?? const <NeighborhoodTeamStanding>[];
+                        if (table.isEmpty) {
+                          return const Text(
+                            'Finaliza partidos personalizados para generar la clasificación del torneo.',
+                            style: TextStyle(color: Colors.white70),
+                          );
+                        }
 
-              return Column(
-                children: [
-                  const Row(
-                    children: [
-                      Expanded(flex: 4, child: Text('Equipo', style: TextStyle(color: BetFlixColors.cyanBright, fontWeight: FontWeight.bold))),
-                      Expanded(child: Text('PJ', textAlign: TextAlign.center, style: TextStyle(color: BetFlixColors.cyanBright, fontWeight: FontWeight.bold))),
-                      Expanded(child: Text('DG', textAlign: TextAlign.center, style: TextStyle(color: BetFlixColors.cyanBright, fontWeight: FontWeight.bold))),
-                      Expanded(child: Text('Pts', textAlign: TextAlign.center, style: TextStyle(color: BetFlixColors.goldYellow, fontWeight: FontWeight.bold))),
-                    ],
-                  ),
-                  const Divider(color: Colors.white24),
-                  ...table.take(6).map((entry) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 5),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 4,
-                            child: Text(
-                              entry.teamName,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        return Column(
+                          children: [
+                            const Row(
+                              children: [
+                                Expanded(flex: 4, child: Text('Equipo', style: TextStyle(color: BetFlixColors.cyanBright, fontWeight: FontWeight.bold))),
+                                Expanded(child: Text('PJ', textAlign: TextAlign.center, style: TextStyle(color: BetFlixColors.cyanBright, fontWeight: FontWeight.bold))),
+                                Expanded(child: Text('DG', textAlign: TextAlign.center, style: TextStyle(color: BetFlixColors.cyanBright, fontWeight: FontWeight.bold))),
+                                Expanded(child: Text('Pts', textAlign: TextAlign.center, style: TextStyle(color: BetFlixColors.goldYellow, fontWeight: FontWeight.bold))),
+                              ],
                             ),
-                          ),
-                          Expanded(
-                            child: Text('${entry.played}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-                          ),
-                          Expanded(
-                            child: Text('${entry.goalDifference}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-                          ),
-                          Expanded(
-                            child: Text('${entry.points}', textAlign: TextAlign.center, style: const TextStyle(color: BetFlixColors.goldYellow, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ],
-              );
-            },
+                            const Divider(color: Colors.white24),
+                            ...table.take(6).map((entry) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 5),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 4,
+                                      child: Text(
+                                        entry.teamName,
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text('${entry.played}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+                                    ),
+                                    Expanded(
+                                      child: Text('${entry.goalDifference}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+                                    ),
+                                    Expanded(
+                                      child: Text('${entry.points}', textAlign: TextAlign.center, style: const TextStyle(color: BetFlixColors.goldYellow, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ],
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _createSeasonDialog() async {
+    _newSeasonController.text = 'Temporada ${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}';
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1C1C30),
+          title: const Text('Crear nueva temporada', style: TextStyle(color: Colors.white)),
+          content: TextField(
+            controller: _newSeasonController,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
+              hintText: 'Nombre de temporada',
+              hintStyle: TextStyle(color: Colors.white54),
+            ),
           ),
-        ),
-      ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Crear'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true || !mounted) return;
+    final name = _newSeasonController.text.trim();
+    if (name.isEmpty) return;
+
+    final success = await context.read<BetProvider>().startNewSeason(seasonName: name);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success ? 'Nueva temporada creada: $name' : 'No se pudo crear la temporada.'),
+      ),
     );
   }
 }
