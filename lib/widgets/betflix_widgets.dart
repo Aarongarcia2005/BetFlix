@@ -105,13 +105,10 @@ class MatchCard extends StatelessWidget {
                     if (isLocal)
                       const Padding(
                         padding: EdgeInsets.only(left: 8),
-                        child: Tooltip(
-                          message: 'Equipo local',
-                          child: Icon(
-                            Icons.star,
-                            color: BetFlixColors.goldYellow,
-                            size: 16,
-                          ),
+                        child: Icon(
+                          Icons.star,
+                          color: BetFlixColors.goldYellow,
+                          size: 16,
                         ),
                       ),
                   ],
@@ -413,8 +410,8 @@ class BadgeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip ?? title,
+    return Semantics(
+      label: tooltip ?? title,
       child: Column(
         children: [
           Container(

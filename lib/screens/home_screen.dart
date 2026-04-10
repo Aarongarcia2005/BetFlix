@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/colors.dart';
@@ -26,9 +27,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   int selectedMatchIndex = -1;
   final MatchService _matchService = MatchService();
   final Random _random = Random();
-  late Timer _simulationTimer;
+  Timer? _simulationTimer;
   List<Match> localMatches = [];
   List<Match> allMatches = [];
+  late final Stream<List<Match>> _trendingMatchesStream;
+  late final Stream<NeighborhoodSeason?> _activeSeasonStream;
   final TextEditingController _newSeasonController = TextEditingController();
   final TextEditingController _calendarTeamsController = TextEditingController();
 
@@ -36,22 +39,31 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    final betProvider = context.read<BetProvider>();
+    _trendingMatchesStream = betProvider.getTrendingMatchesStream();
+    _activeSeasonStream = betProvider.getActiveSeasonStream();
     _loadRandomMatches();
     Future.microtask(() async {
-      await context.read<BetProvider>().ensureActiveSeason();
-      await context.read<BetProvider>().seedRandomMatchesIfEmpty();
-      await context.read<BetProvider>().autoCloseExpiredMatches();
+      await betProvider.ensureActiveSeason();
+      await betProvider.seedRandomMatchesIfEmpty();
+      await betProvider.autoCloseExpiredMatches();
     });
 
-    _simulationTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      if (!mounted) return;
-      try {
-        _simulateMatchResults();
-        context.read<BetProvider>().autoCloseExpiredMatches();
-      } catch (_) {
-        // Evita que errores de backend dejen la pantalla sin renderizado.
-      }
-    });
+    if (!kIsWeb) {
+      _simulationTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+        if (!mounted) return;
+        // Evita setState reentrante durante eventos de puntero.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          try {
+            _simulateMatchResults();
+            context.read<BetProvider>().autoCloseExpiredMatches();
+          } catch (_) {
+            // Evita que errores de backend dejen la pantalla sin renderizado.
+          }
+        });
+      });
+    }
   }
 
   void _loadRandomMatches() {
@@ -78,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   @override
   void dispose() {
-    _simulationTimer.cancel();
+    _simulationTimer?.cancel();
     _tabController.dispose();
     _newSeasonController.dispose();
     _calendarTeamsController.dispose();
@@ -361,7 +373,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ),
         const SizedBox(height: AppConstants.paddingMedium),
         StreamBuilder<List<Match>>(
-          stream: context.watch<BetProvider>().getTrendingMatchesStream(),
+          stream: _trendingMatchesStream,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               return _infoPanel('No se pudo cargar el feed trending. Revisa Firebase/índices.');
@@ -456,7 +468,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Widget _tournamentModeSection() {
     return StreamBuilder<NeighborhoodSeason?>(
-      stream: context.watch<BetProvider>().getActiveSeasonStream(),
+      stream: _activeSeasonStream,
       builder: (context, seasonSnapshot) {
         if (seasonSnapshot.hasError) {
           return _infoPanel('No se pudo cargar el torneo de barrio.');
@@ -549,8 +561,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     )
                   : StreamBuilder<List<NeighborhoodTeamStanding>>(
                       stream: context
-                          .watch<BetProvider>()
-                          .getNeighborhoodTournamentTableStream(seasonId: season.id),
+                        .read<BetProvider>()
+                        .getNeighborhoodTournamentTableStream(seasonId: season.id),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
                           return const Center(
@@ -618,7 +630,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.2)),
                 ),
                 child: StreamBuilder<List<Match>>(
-                  stream: context.watch<BetProvider>().getSeasonFixturesStream(seasonId: season.id),
+                  stream: context.read<BetProvider>().getSeasonFixturesStream(seasonId: season.id),
                   builder: (context, snapshot) {
                     final fixtures = snapshot.data ?? const <Match>[];
                     if (fixtures.isEmpty) {
