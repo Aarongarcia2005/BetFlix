@@ -44,8 +44,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     });
 
     _simulationTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      _simulateMatchResults();
-      context.read<BetProvider>().autoCloseExpiredMatches();
+      if (!mounted) return;
+      try {
+        _simulateMatchResults();
+        context.read<BetProvider>().autoCloseExpiredMatches();
+      } catch (_) {
+        // Evita que errores de backend dejen la pantalla sin renderizado.
+      }
     });
   }
 
@@ -96,34 +101,53 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             colors: BetFlixColors.pageGradient,
           ),
         ),
-        child: CustomScrollView(
-          slivers: [
-          // Header profesional
-          SliverAppBar(
-            expandedHeight: 200,
-            floating: false,
-            pinned: true,
-            flexibleSpace: FlexibleSpaceBar(
-              background: ProfessionalHeader(
-                userName: currentUser?.name ?? 'Usuario',
-                coins: currentUser?.coins ?? 0,
-                rankPosition: 1,
-                onProfileTap: () {
-                  // Ir a perfil
-                },
+        child: SafeArea(
+          bottom: false,
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: AppConstants.paddingLarge),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppConstants.paddingMedium,
+                  AppConstants.paddingMedium,
+                  AppConstants.paddingMedium,
+                  0,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: ProfessionalHeader(
+                    userName: currentUser?.name ?? 'Usuario',
+                    coins: currentUser?.coins ?? 0,
+                    rankPosition: 1,
+                    onProfileTap: () {
+                      Navigator.pushNamed(context, '/profile');
+                    },
+                  ),
+                ),
               ),
-            ),
-          ),
 
-          // Contenido
-          SliverToBoxAdapter(
-            child: Column(
-              children: [
-                const SizedBox(height: AppConstants.paddingMedium),
+              const SizedBox(height: AppConstants.paddingMedium),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.paddingMedium,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Inicio',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: AppConstants.paddingSmall),
 
                 // Sección de partidos locales
-                _sectionReveal(
-                  Padding(
+              Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppConstants.paddingMedium,
                   ),
@@ -156,171 +180,168 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     ],
                   ),
                 ),
-                ),
 
                 // Tarjetas de partidos locales
-                SizedBox(
-                  height: 280,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.paddingMedium,
-                    ),
-                    itemCount: localMatches.length,
-                    itemBuilder: (context, index) {
-                      final match = localMatches[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(
-                          right: AppConstants.paddingMedium,
-                        ),
-                        child: SizedBox(
-                          width: 250,
-                          child: MatchCard(
-                            homeTeam: match.homeTeam,
-                            awayTeam: match.awayTeam,
-                            league: match.league,
-                            dateTime:
-                                'Hoy · ${match.dateTime.hour}:${match.dateTime.minute.toString().padLeft(2, '0')}',
-                            isLocal: match.isLocal,
-                            isLive: match.status == MatchStatus.live,
-                            homeScore: match.homeScore,
-                            awayScore: match.awayScore,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CreateBetScreen(match: match),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: AppConstants.paddingMedium),
-
-                Padding(
+              SizedBox(
+                height: 280,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(
-                      horizontal: AppConstants.paddingMedium),
-                  child: Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      _quickActionButton(
-                        color: BetFlixColors.pinkBright,
-                        onPressed: _loadRandomMatches,
-                        icon: const Icon(Icons.refresh, size: 20),
-                        label: 'Refrescar Partidos',
+                    horizontal: AppConstants.paddingMedium,
+                  ),
+                  itemCount: localMatches.length,
+                  itemBuilder: (context, index) {
+                    final match = localMatches[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(
+                        right: AppConstants.paddingMedium,
                       ),
-                      _quickActionButton(
-                        color: BetFlixColors.cyanBright,
-                        onPressed: _simulateMatchResults,
-                        icon: const Icon(Icons.sports_soccer, size: 20),
-                        label: 'Simular Resultados',
-                      ),
-                      _quickActionButton(
-                        color: BetFlixColors.orangeVibrant,
-                        onPressed: () async {
-                          final user = context.read<UserProvider>().currentUser;
-                          if (user == null || localMatches.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Inicia sesión y carga partidos primero.')),
+                      child: SizedBox(
+                        width: 250,
+                        child: MatchCard(
+                          homeTeam: match.homeTeam,
+                          awayTeam: match.awayTeam,
+                          league: match.league,
+                          dateTime:
+                              'Hoy · ${match.dateTime.hour}:${match.dateTime.minute.toString().padLeft(2, '0')}',
+                          isLocal: match.isLocal,
+                          isLive: match.status == MatchStatus.live,
+                          homeScore: match.homeScore,
+                          awayScore: match.awayScore,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CreateBetScreen(match: match),
+                              ),
                             );
-                            return;
-                          }
-                          final match = localMatches[_random.nextInt(localMatches.length)];
-                          final success = await context.read<BetProvider>().createRandomBet(
-                                userId: user.id,
-                                match: match,
-                              );
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(success
-                                  ? 'Apuesta aleatoria creada con éxito para ${match.homeTeam} vs ${match.awayTeam}.'
-                                  : 'Error al crear apuesta aleatoria.'),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.auto_awesome, size: 20),
-                        label: 'Apuesta Random',
+                          },
+                        ),
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
+              ),
 
-                const SizedBox(height: AppConstants.paddingLarge),
+              const SizedBox(height: AppConstants.paddingMedium),
 
-                _sectionReveal(Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.paddingMedium,
-                  ),
-                  child: _trendingFeedSection(),
-                )),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppConstants.paddingMedium),
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _quickActionButton(
+                      color: BetFlixColors.pinkBright,
+                      onPressed: _loadRandomMatches,
+                      icon: const Icon(Icons.refresh, size: 20),
+                      label: 'Refrescar Partidos',
+                    ),
+                    _quickActionButton(
+                      color: BetFlixColors.cyanBright,
+                      onPressed: _simulateMatchResults,
+                      icon: const Icon(Icons.sports_soccer, size: 20),
+                      label: 'Simular Resultados',
+                    ),
+                    _quickActionButton(
+                      color: BetFlixColors.orangeVibrant,
+                      onPressed: () async {
+                        final user = context.read<UserProvider>().currentUser;
+                        if (user == null || localMatches.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Inicia sesión y carga partidos primero.')),
+                          );
+                          return;
+                        }
+                        final match = localMatches[_random.nextInt(localMatches.length)];
+                        final success = await context.read<BetProvider>().createRandomBet(
+                              userId: user.id,
+                              match: match,
+                            );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(success
+                                ? 'Apuesta aleatoria creada con éxito para ${match.homeTeam} vs ${match.awayTeam}.'
+                                : 'Error al crear apuesta aleatoria.'),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.auto_awesome, size: 20),
+                      label: 'Apuesta Random',
+                    ),
+                  ],
+                ),
+              ),
 
-                const SizedBox(height: AppConstants.paddingLarge),
+              const SizedBox(height: AppConstants.paddingLarge),
 
-                _sectionReveal(Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.paddingMedium,
-                  ),
-                  child: _tournamentModeSection(),
-                )),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.paddingMedium,
+                ),
+                child: _trendingFeedSection(),
+              ),
 
-                const SizedBox(height: AppConstants.paddingLarge),
+              const SizedBox(height: AppConstants.paddingLarge),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.paddingMedium,
+                ),
+                child: _tournamentModeSection(),
+              ),
+
+              const SizedBox(height: AppConstants.paddingLarge),
 
                 // Retos populares
-                _sectionReveal(Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppConstants.paddingMedium,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Retos Populares',
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.paddingMedium,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Retos Populares',
+                          style: TextStyle(
+                            color: BetFlixColors.cyanBright,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        GestureDetector(
+                          child: const Text(
+                            'Ver todos →',
                             style: TextStyle(
-                              color: BetFlixColors.cyanBright,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                              color: BetFlixColors.pinkBright,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                          GestureDetector(
-                            child: const Text(
-                              'Ver todos →',
-                              style: TextStyle(
-                                color: BetFlixColors.pinkBright,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppConstants.paddingMedium),
-                      ChallengeCard(
-                        title: 'Reto 1 vs 1',
-                        description: 'Acertá el resultado de 3 partidos',
-                        icon: '🎯',
-                        rewardCoins: 500,
-                        progressPercentage: 66,
-                        onTap: () {
-                          Navigator.pushNamed(context, '/challenges');
-                        },
-                      ),
-                    ],
-                  ),
-                )),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppConstants.paddingMedium),
+                    ChallengeCard(
+                      title: 'Reto 1 vs 1',
+                      description: 'Acertá el resultado de 3 partidos',
+                      icon: '🎯',
+                      rewardCoins: 500,
+                      progressPercentage: 66,
+                      onTap: () {
+                        Navigator.pushNamed(context, '/challenges');
+                      },
+                    ),
+                  ],
+                ),
+              ),
 
-                const SizedBox(height: AppConstants.paddingLarge),
-              ],
-            ),
+              const SizedBox(height: AppConstants.paddingLarge),
+            ],
           ),
-        ],
         ),
       ),
     );
@@ -342,6 +363,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         StreamBuilder<List<Match>>(
           stream: context.watch<BetProvider>().getTrendingMatchesStream(),
           builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return _infoPanel('No se pudo cargar el feed trending. Revisa Firebase/índices.');
+            }
+
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
                 child: CircularProgressIndicator(color: BetFlixColors.cyanBright),
@@ -365,19 +390,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             }
 
             return Column(
-              children: matches.take(5).toList().asMap().entries.map((entry) {
-                final index = entry.key;
-                final match = entry.value;
-                return TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0, end: 1),
-                  duration: Duration(milliseconds: 320 + (index * 60)),
-                  curve: Curves.easeOutCubic,
-                  builder: (context, value, _) {
-                    return Transform.translate(
-                      offset: Offset(0, 14 * (1 - value)),
-                      child: Opacity(
-                        opacity: value,
-                        child: Container(
+              children: matches.take(5).map((match) {
+                return Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -431,10 +445,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                     ],
                   ),
-                        ),
-                      ),
-                    );
-                  },
                 );
               }).toList(),
             );
@@ -448,6 +458,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return StreamBuilder<NeighborhoodSeason?>(
       stream: context.watch<BetProvider>().getActiveSeasonStream(),
       builder: (context, seasonSnapshot) {
+        if (seasonSnapshot.hasError) {
+          return _infoPanel('No se pudo cargar el torneo de barrio.');
+        }
+
         final season = seasonSnapshot.data;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -766,20 +780,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _sectionReveal(Widget child) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: AppConstants.animationDurationMedium,
-      curve: Curves.easeOutCubic,
-      builder: (context, value, _) {
-        return Transform.translate(
-          offset: Offset(0, 16 * (1 - value)),
-          child: Opacity(opacity: value, child: child),
-        );
-      },
-    );
-  }
-
   Widget _quickActionButton({
     required Color color,
     required VoidCallback onPressed,
@@ -797,6 +797,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       onPressed: onPressed,
       icon: icon,
       label: Text(label),
+    );
+  }
+
+  Widget _infoPanel(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: BetFlixColors.surfaceCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.2)),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(color: Colors.white70),
+      ),
     );
   }
 }
