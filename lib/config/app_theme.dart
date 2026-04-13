@@ -280,7 +280,7 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: BetFlixColors.pinkBright,
           foregroundColor: Colors.white,
-          minimumSize: const Size.fromHeight(50),
+          minimumSize: const Size(0, 50),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -294,7 +294,7 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: BetFlixColors.cyanBright,
-          minimumSize: const Size.fromHeight(48),
+          minimumSize: const Size(0, 48),
           side: BorderSide(color: BetFlixColors.cyanBright.withOpacity(0.8), width: 1.3),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),

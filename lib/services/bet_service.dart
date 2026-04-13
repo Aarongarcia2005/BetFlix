@@ -829,6 +829,14 @@ class BetService {
     required double odds,
   }) async {
     try {
+      final authUser = _auth.currentUser;
+      if (authUser == null) {
+        throw 'Debes iniciar sesión para crear apuestas.';
+      }
+      if (authUser.uid != userId) {
+        throw 'Tu sesión está desactualizada. Cierra sesión y vuelve a entrar.';
+      }
+
       final batch = _firestore.batch();
       final betRef = _firestore.collection('bets').doc();
 

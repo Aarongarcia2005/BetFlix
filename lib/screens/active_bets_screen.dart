@@ -4,6 +4,7 @@ import '../config/colors.dart';
 import '../models/models.dart';
 import '../providers/bet_provider.dart';
 import '../providers/user_provider.dart';
+import 'create_bet_screen.dart';
 import '../widgets/betflix_widgets.dart';
 
 class ActiveBetsScreen extends StatefulWidget {
@@ -14,6 +15,30 @@ class ActiveBetsScreen extends StatefulWidget {
 }
 
 class _ActiveBetsScreenState extends State<ActiveBetsScreen> {
+  final GlobalKey _communityMarketsKey = GlobalKey();
+  bool _highlightCommunityMarkets = false;
+
+  Future<void> _scrollToCommunityMarkets() async {
+    final targetContext = _communityMarketsKey.currentContext;
+    if (targetContext == null) return;
+
+    if (mounted) {
+      setState(() => _highlightCommunityMarkets = true);
+    }
+
+    await Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      alignment: 0.05,
+    );
+
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (!mounted) return;
+      setState(() => _highlightCommunityMarkets = false);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -56,39 +81,6 @@ class _ActiveBetsScreenState extends State<ActiveBetsScreen> {
               child: CircularProgressIndicator(color: BetFlixColors.cyanBright),
             );
           }
-
-          if (betProvider.userBets.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.sports_score,
-                    size: 64,
-                    color: BetFlixColors.purpleVibrant.withOpacity(0.5),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No hay apuestas activas',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () => Navigator.of(context).pushNamed('/create-bet'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: BetFlixColors.pinkBright,
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                    ),
-                    child: const Text('Crear Apuesta'),
-                  ),
-                ],
-              ),
-            );
-          }
-
           return RefreshIndicator(
             color: BetFlixColors.cyanBright,
             onRefresh: () async {
@@ -97,20 +89,264 @@ class _ActiveBetsScreenState extends State<ActiveBetsScreen> {
                 await betProvider.loadUserBets(userId);
               }
             },
-            child: ListView.builder(
+            child: ListView(
               padding: const EdgeInsets.all(16),
-              itemCount: betProvider.userBets.length,
-              itemBuilder: (context, index) {
-                final bet = betProvider.userBets[index];
-                return _AnimatedBetCard(
-                  delayMs: 65 * index,
-                  child: _BetCard(bet: bet),
-                );
-              },
+              children: [
+                _neighborhoodCoreSection(),
+                const SizedBox(height: 14),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  padding: _highlightCommunityMarkets
+                      ? const EdgeInsets.all(10)
+                      : EdgeInsets.zero,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    color: _highlightCommunityMarkets
+                        ? BetFlixColors.cyanBright.withOpacity(0.09)
+                        : Colors.transparent,
+                    border: Border.all(
+                      color: _highlightCommunityMarkets
+                          ? BetFlixColors.cyanBright.withOpacity(0.7)
+                          : Colors.transparent,
+                      width: 1.4,
+                    ),
+                    boxShadow: _highlightCommunityMarkets
+                        ? [
+                            BoxShadow(
+                              color: BetFlixColors.cyanBright.withOpacity(0.22),
+                              blurRadius: 16,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : const [],
+                  ),
+                  child: KeyedSubtree(
+                    key: _communityMarketsKey,
+                    child: StreamBuilder<List<Match>>(
+                    stream: betProvider.getOpenMatchesStream(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return _infoCard(
+                          icon: Icons.warning_amber_rounded,
+                          title: 'No se pudieron cargar partidos de barrio',
+                          subtitle: 'Revisa Firebase (reglas/índices) y vuelve a intentar.',
+                        );
+                      }
+
+                      final currentUserId = userProvider.currentUser?.id;
+                      final openCommunityMatches = (snapshot.data ?? const <Match>[])
+                          .where((m) => m.source == MatchSource.userCreated)
+                          .where((m) => m.createdByUserId == null || m.createdByUserId != currentUserId)
+                          .take(4)
+                          .toList();
+
+                      if (openCommunityMatches.isEmpty) {
+                        return _infoCard(
+                          icon: Icons.groups_2_outlined,
+                          title: 'Aún no hay partidos de barrio abiertos',
+                          subtitle: 'Sé el primero en crear uno y deja que tu gente entre a apostar.',
+                        );
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.local_fire_department,
+                                size: 18,
+                                color: _highlightCommunityMarkets
+                                    ? BetFlixColors.goldYellow
+                                    : BetFlixColors.cyanBright,
+                              ),
+                              const SizedBox(width: 6),
+                              const Text(
+                                'Partidos de barrio para apostar ahora',
+                                style: TextStyle(
+                                  color: BetFlixColors.cyanBright,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ],
+                            ),
+                          const SizedBox(height: 8),
+                          ...openCommunityMatches.map((match) {
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1D1D32),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: BetFlixColors.purpleVibrant.withOpacity(0.28)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${match.homeTeam} vs ${match.awayTeam}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Creador: ${match.createdByName ?? 'Comunidad'} • ${match.betsCount} apuestas',
+                                          style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => CreateBetScreen(match: match),
+                                        ),
+                                      );
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: BetFlixColors.pinkBright,
+                                    ),
+                                    child: const Text('Entrar'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+                      );
+                    },
+                  ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (betProvider.userBets.isEmpty)
+                  _infoCard(
+                    icon: Icons.sports_score,
+                    title: 'No tienes apuestas activas todavía',
+                    subtitle: 'Crea un partido personalizado o entra en uno de la comunidad.',
+                  )
+                else
+                  ...betProvider.userBets.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final bet = entry.value;
+                    return _AnimatedBetCard(
+                      delayMs: 65 * index,
+                      child: _BetCard(bet: bet),
+                    );
+                  }),
+              ],
             ),
           );
         },
       ),
+      ),
+    );
+  }
+
+  Widget _neighborhoodCoreSection() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2A213D), Color(0xFF1A1629)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Mercado de Barrios',
+            style: TextStyle(
+              color: BetFlixColors.cyanBright,
+              fontWeight: FontWeight.bold,
+              fontSize: 17,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Crea tu propio partido con nombres reales del barrio y deja que toda la comunidad entre a apostar.',
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () => Navigator.of(context).pushNamed('/create-bet'),
+                icon: const Icon(Icons.add_circle_outline, size: 18),
+                style: ElevatedButton.styleFrom(backgroundColor: BetFlixColors.pinkBright),
+                label: const Text('Crear partido personalizado'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _scrollToCommunityMarkets,
+                icon: const Icon(Icons.campaign_outlined, size: 18),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: BetFlixColors.cyanBright),
+                  foregroundColor: BetFlixColors.cyanBright,
+                ),
+                label: const Text('Abrir mercados y apostar'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: BetFlixColors.purpleVibrant.withOpacity(0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: BetFlixColors.pinkBright.withOpacity(0.95)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

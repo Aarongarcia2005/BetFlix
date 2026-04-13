@@ -372,10 +372,11 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
       body: StreamBuilder<List<Match>>(
         stream: context.watch<BetProvider>().getOpenMatchesStream(),
         builder: (context, snapshot) {
+          final hasStreamError = snapshot.hasError;
           final matches = snapshot.data ?? const <Match>[];
 
-          if (_selectedMatch == null && matches.isNotEmpty) {
-            _selectedMatch = widget.match ?? matches.first;
+          if (_selectedMatch == null) {
+            _selectedMatch = widget.match ?? (matches.isNotEmpty ? matches.first : null);
           }
 
           final selectedMatch = _selectedMatch;
@@ -403,6 +404,23 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                if (hasStreamError)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: BetFlixColors.accentRed.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: BetFlixColors.accentRed.withOpacity(0.45)),
+                      ),
+                      child: const Text(
+                        'No se pudieron cargar los partidos abiertos. Puedes apostar en el partido seleccionado manualmente.',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  ),
                 _reveal(
                   _sectionTitle('1) Crea tu partido del barrio'),
                 ),
