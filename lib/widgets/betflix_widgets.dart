@@ -30,6 +30,13 @@ class MatchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryTextColor = isDark ? Colors.white : BetFlixTextStyles.cardTitle.color;
+    final secondaryTextColor = isDark ? Colors.white70 : BetFlixTextStyles.subtitle.color;
+    final cardGradient = isDark
+        ? [BetFlixColors.surfaceDark, BetFlixColors.surfaceLight]
+        : const [Color(0xFFFFFFFF), Color(0xFFF3F4F6)];
+
     return GestureDetector(
       onTap: onTap,
       child: Card(
@@ -47,10 +54,7 @@ class MatchCard extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                BetFlixColors.surfaceDark,
-                BetFlixColors.surfaceLight,
-              ],
+              colors: cardGradient,
             ),
           ),
           child: Padding(
@@ -64,7 +68,7 @@ class MatchCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         league,
-                        style: BetFlixTextStyles.subtitle,
+                        style: BetFlixTextStyles.subtitle.copyWith(color: secondaryTextColor),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -141,7 +145,7 @@ class MatchCard extends StatelessWidget {
                             textAlign: TextAlign.center,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: BetFlixTextStyles.cardTitle,
+                            style: BetFlixTextStyles.cardTitle.copyWith(color: primaryTextColor),
                           ),
                         ],
                       ),
@@ -193,7 +197,7 @@ class MatchCard extends StatelessWidget {
                             textAlign: TextAlign.center,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: BetFlixTextStyles.cardTitle,
+                            style: BetFlixTextStyles.cardTitle.copyWith(color: primaryTextColor),
                           ),
                         ],
                       ),
@@ -207,8 +211,8 @@ class MatchCard extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: AppConstants.paddingMedium),
                     child: Text(
                       '$homeScore - $awayScore',
-                      style: const TextStyle(
-                        color: BetFlixColors.white,
+                      style: TextStyle(
+                        color: isDark ? BetFlixColors.white : const Color(0xFF111827),
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -236,7 +240,7 @@ class MatchCard extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(
                         dateTime,
-                        style: BetFlixTextStyles.subtitle,
+                        style: BetFlixTextStyles.subtitle.copyWith(color: secondaryTextColor),
                       ),
                     ],
                   ),
@@ -483,12 +487,21 @@ class ProfessionalHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final headerGradient = isDark
+        ? BetFlixColors.primaryGradient
+        : const [Color(0xFFFFFFFF), Color(0xFFF3F4F6)];
+    final headerTextColor = isDark ? BetFlixColors.white : const Color(0xFF111827);
+
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: BetFlixColors.primaryGradient,
+          colors: headerGradient,
+        ),
+        border: Border.all(
+          color: isDark ? BetFlixColors.primaryBlueLight.withOpacity(0.3) : const Color(0xFFE5E7EB),
         ),
       ),
       child: Padding(
@@ -505,21 +518,14 @@ class ProfessionalHeader extends StatelessWidget {
                     height: 50,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: BetFlixColors.white,
+                      color: isDark ? BetFlixColors.white : const Color(0xFFE5E7EB),
                       border: Border.all(
                         color: BetFlixColors.goldYellow,
                         width: 2,
                       ),
                     ),
                     child: Center(
-                      child: Text(
-                        userName.isNotEmpty ? userName[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                          color: BetFlixColors.primaryBlue,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20,
-                        ),
-                      ),
+                      child: _buildProfileAvatar(),
                     ),
                   ),
                 ),
@@ -532,8 +538,8 @@ class ProfessionalHeader extends StatelessWidget {
                     children: [
                       Text(
                         userName,
-                        style: const TextStyle(
-                          color: BetFlixColors.white,
+                        style: TextStyle(
+                          color: headerTextColor,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
@@ -562,7 +568,7 @@ class ProfessionalHeader extends StatelessWidget {
                       vertical: 8,
                     ),
                     decoration: BoxDecoration(
-                      color: BetFlixColors.white.withOpacity(0.2),
+                      color: isDark ? BetFlixColors.white.withOpacity(0.2) : const Color(0xFFE5E7EB),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: BetFlixColors.goldYellow.withOpacity(0.5),
@@ -589,6 +595,45 @@ class ProfessionalHeader extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildProfileAvatar() {
+    final avatar = (profileImageUrl ?? '').trim();
+    if (avatar.isNotEmpty && (avatar.startsWith('http://') || avatar.startsWith('https://'))) {
+      return ClipOval(
+        child: Image.network(
+          avatar,
+          width: 46,
+          height: 46,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _avatarTextFallback(),
+        ),
+      );
+    }
+
+    if (avatar.isNotEmpty) {
+      return Text(
+        avatar,
+        style: const TextStyle(
+          color: BetFlixColors.primaryBlue,
+          fontWeight: FontWeight.bold,
+          fontSize: 24,
+        ),
+      );
+    }
+
+    return _avatarTextFallback();
+  }
+
+  Widget _avatarTextFallback() {
+    return Text(
+      userName.isNotEmpty ? userName[0].toUpperCase() : '?',
+      style: const TextStyle(
+        color: BetFlixColors.primaryBlue,
+        fontWeight: FontWeight.bold,
+        fontSize: 20,
       ),
     );
   }

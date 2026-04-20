@@ -9,6 +9,7 @@ import '../config/app_constants.dart';
 import '../config/app_theme.dart';
 import '../models/models.dart';
 import '../providers/bet_provider.dart';
+import '../providers/theme_provider.dart';
 import '../providers/user_provider.dart';
 import '../screens/create_bet_screen.dart';
 import '../services/match_service.dart';
@@ -22,8 +23,10 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late TabController _tabController;
+  late final PageController _liveTickerPageController;
+  late final AnimationController _livePulseController;
   int selectedMatchIndex = -1;
   final MatchService _matchService = MatchService();
   final Random _random = Random();
@@ -34,11 +37,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   late final Stream<NeighborhoodSeason?> _activeSeasonStream;
   final TextEditingController _newSeasonController = TextEditingController();
   final TextEditingController _calendarTeamsController = TextEditingController();
+  String _trendingFilter = 'live';
+  Timer? _liveTickerTimer;
+  int _liveTickerIndex = 0;
+  int _liveTickerConfiguredCount = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _liveTickerPageController = PageController(viewportFraction: 0.9);
+    _livePulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+      lowerBound: 0.8,
+      upperBound: 1.15,
+    )..repeat(reverse: true);
     final betProvider = context.read<BetProvider>();
     _trendingMatchesStream = betProvider.getTrendingMatchesStream();
     _activeSeasonStream = betProvider.getActiveSeasonStream();
@@ -91,10 +105,41 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   void dispose() {
     _simulationTimer?.cancel();
+    _liveTickerTimer?.cancel();
+    _livePulseController.dispose();
+    _liveTickerPageController.dispose();
     _tabController.dispose();
     _newSeasonController.dispose();
     _calendarTeamsController.dispose();
     super.dispose();
+  }
+
+  void _startLiveTickerAutoScroll(int itemCount) {
+    if (_liveTickerConfiguredCount == itemCount && _liveTickerTimer != null) {
+      return;
+    }
+
+    _liveTickerConfiguredCount = itemCount;
+
+    if (itemCount <= 1) {
+      _liveTickerTimer?.cancel();
+      _liveTickerTimer = null;
+      _liveTickerIndex = 0;
+      return;
+    }
+
+    _liveTickerTimer?.cancel();
+    _liveTickerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (!mounted) return;
+      if (!_liveTickerPageController.hasClients) return;
+
+      _liveTickerIndex = (_liveTickerIndex + 1) % itemCount;
+      _liveTickerPageController.animateToPage(
+        _liveTickerIndex,
+        duration: const Duration(milliseconds: 520),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   // No se usan listas estáticas aquí; se generan dinámicamente en initState
@@ -102,15 +147,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final currentUser = context.watch<UserProvider>().currentUser;
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pageGradient = isDark
+        ? BetFlixColors.pageGradient
+        : const [Color(0xFFF6F8FF), Color(0xFFEAF0FF), Color(0xFFDDE8FF)];
+    final primaryTextColor = isDark ? Colors.white : const Color(0xFF172033);
 
     return Scaffold(
-      backgroundColor: BetFlixColors.background,
+      backgroundColor: Theme.of(context).colorScheme.background,
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: BetFlixColors.pageGradient,
+            colors: pageGradient,
           ),
         ),
         child: SafeArea(
@@ -130,6 +181,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   child: ProfessionalHeader(
                     userName: currentUser?.name ?? 'Usuario',
                     coins: currentUser?.coins ?? 0,
+                    profileImageUrl: currentUser?.profileImageUrl,
                     rankPosition: 1,
                     onProfileTap: () {
                       Navigator.pushNamed(context, '/profile');
@@ -144,15 +196,32 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppConstants.paddingMedium,
                 ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Inicio',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Inicio',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              color: primaryTextColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: themeProvider.isDarkMode
+                          ? 'Cambiar a modo claro'
+                          : 'Cambiar a modo oscuro',
+                      onPressed: () {
+                        themeProvider.toggleTheme();
+                      },
+                      icon: Icon(
+                        themeProvider.isDarkMode
+                            ? Icons.light_mode_outlined
+                            : Icons.dark_mode_outlined,
+                        color: isDark ? BetFlixColors.cyanBright : Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
@@ -292,6 +361,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 padding: const EdgeInsets.symmetric(
                   horizontal: AppConstants.paddingMedium,
                 ),
+                child: _liveNowTickerSection(),
+              ),
+
+              const SizedBox(height: AppConstants.paddingLarge),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.paddingMedium,
+                ),
                 child: _trendingFeedSection(),
               ),
 
@@ -360,23 +438,54 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _trendingFeedSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDark ? BetFlixColors.cyanBright : const Color(0xFF0F172A);
+    final cardBg = isDark ? const Color(0xFF222238) : Colors.white;
+    final cardGradient = isDark
+        ? const [Color(0xFF2B2B42), Color(0xFF18182A)]
+        : const [Color(0xFFFFFFFF), Color(0xFFF3F4F6)];
+    final primaryTextColor = isDark ? Colors.white : const Color(0xFF111827);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Feed Trending',
-          style: TextStyle(
-            color: BetFlixColors.cyanBright,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Partidos en Tendencia',
+              style: TextStyle(
+                color: titleColor,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            IconButton(
+              tooltip: 'Actualizar partidos',
+              onPressed: () {
+                context.read<BetProvider>().autoCloseExpiredMatches();
+              },
+              icon: const Icon(Icons.refresh, color: BetFlixColors.cyanBright),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _trendingFilterChip('live', 'En directo', isDark),
+            _trendingFilterChip('scheduled', 'Programados', isDark),
+            _trendingFilterChip('finished', 'Finalizados', isDark),
+            _trendingFilterChip('all', 'Todos', isDark),
+          ],
         ),
         const SizedBox(height: AppConstants.paddingMedium),
         StreamBuilder<List<Match>>(
           stream: _trendingMatchesStream,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
-              return _infoPanel('No se pudo cargar el feed trending. Revisa Firebase/índices.');
+              return _infoPanel('No se pudieron cargar los partidos en tendencia. Revisa Firebase/índices.');
             }
 
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -386,74 +495,134 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             }
 
             final matches = snapshot.data ?? const <Match>[];
-            if (matches.isEmpty) {
+            final filtered = matches.where((match) {
+              switch (_trendingFilter) {
+                case 'live':
+                  return match.status == MatchStatus.live;
+                case 'scheduled':
+                  return match.status == MatchStatus.scheduled;
+                case 'finished':
+                  return match.status == MatchStatus.finished;
+                case 'all':
+                default:
+                  return true;
+              }
+            }).toList();
+
+            if (filtered.isEmpty) {
               return Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF222238),
+                  color: cardBg,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
-                  'Aún no hay partidos en tendencia. Crea y apuesta para activarlo.',
-                  style: TextStyle(color: Colors.white70),
+                child: Text(
+                  'No hay partidos para este filtro ahora mismo.',
+                  style: TextStyle(color: isDark ? Colors.white70 : const Color(0xFF4B5563)),
                 ),
               );
             }
 
             return Column(
-              children: matches.take(5).map((match) {
+              children: filtered.take(8).map((match) {
+                final statusText = match.status == MatchStatus.live
+                    ? 'EN DIRECTO'
+                    : match.status == MatchStatus.scheduled
+                        ? 'PROGRAMADO'
+                        : match.status == MatchStatus.finished
+                            ? 'FINALIZADO'
+                            : 'CANCELADO';
+                final statusColor = match.status == MatchStatus.live
+                    ? BetFlixColors.accentRed
+                    : match.status == MatchStatus.scheduled
+                        ? BetFlixColors.cyanBright
+                        : match.status == MatchStatus.finished
+                            ? BetFlixColors.greenLime
+                            : BetFlixColors.grey;
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF2B2B42),
-                        const Color(0xFF18182A),
-                      ],
-                    ),
+                    gradient: LinearGradient(colors: cardGradient),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: BetFlixColors.purpleVibrant.withOpacity(0.25)),
                   ),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${match.homeTeam} vs ${match.awayTeam}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${match.homeTeam} vs ${match.awayTeam}',
+                                  style: TextStyle(
+                                    color: primaryTextColor,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${match.betsCount} apuestas • ${match.source == MatchSource.userCreated ? 'Barrio' : 'Open BetFlix'}',
+                                  style: const TextStyle(
+                                    color: BetFlixColors.cyanBright,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: statusColor.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: statusColor),
+                            ),
+                            child: Text(
+                              statusText,
+                              style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${match.betsCount} apuestas • ${match.source == MatchSource.userCreated ? 'Barrio' : 'Open BetFlix'}',
-                              style: const TextStyle(
-                                color: BetFlixColors.cyanBright,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              (match.homeScore != null && match.awayScore != null)
+                                  ? 'Marcador: ${match.homeScore} - ${match.awayScore}'
+                                  : 'Marcador pendiente',
+                              style: TextStyle(
+                                color: isDark ? Colors.white70 : const Color(0xFF4B5563),
                                 fontSize: 12,
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CreateBetScreen(match: match),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CreateBetScreen(match: match),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: BetFlixColors.pinkBright,
+                              foregroundColor: Colors.white,
                             ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: BetFlixColors.pinkBright,
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text('Apostar'),
+                            child: const Text('Apostar'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -466,7 +635,190 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  Widget _liveNowTickerSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDark ? BetFlixColors.accentRed : const Color(0xFF111827);
+    final subtitleColor = isDark ? Colors.white70 : const Color(0xFF4B5563);
+    final cardGradient = isDark
+        ? const [Color(0xFF2A1E2D), Color(0xFF1A1525)]
+        : const [Color(0xFFFFFFFF), Color(0xFFF3F4F6)];
+
+    return StreamBuilder<List<Match>>(
+      stream: _trendingMatchesStream,
+      builder: (context, snapshot) {
+        if (snapshot.hasError || snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+
+        final liveMatches = (snapshot.data ?? const <Match>[])
+            .where((match) => match.status == MatchStatus.live)
+            .take(3)
+            .toList();
+
+        if (liveMatches.isEmpty) return const SizedBox.shrink();
+
+        _startLiveTickerAutoScroll(liveMatches.length);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: BetFlixColors.accentRed,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'En Directo Ahora',
+                  style: TextStyle(
+                    color: titleColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Los partidos más calientes en este momento',
+              style: TextStyle(color: subtitleColor, fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 140,
+              child: PageView.builder(
+                controller: _liveTickerPageController,
+                itemCount: liveMatches.length,
+                onPageChanged: (index) {
+                  _liveTickerIndex = index;
+                },
+                itemBuilder: (context, index) {
+                  final match = liveMatches[index];
+                  return Container(
+                    margin: const EdgeInsets.only(right: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: cardGradient),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: BetFlixColors.accentRed.withOpacity(0.45)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: BetFlixColors.accentRed.withOpacity(0.12),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            ScaleTransition(
+                              scale: _livePulseController,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: BetFlixColors.accentRed,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: const Text(
+                                  'LIVE',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '${match.homeScore ?? 0} - ${match.awayScore ?? 0}',
+                              style: TextStyle(
+                                color: isDark ? Colors.white : const Color(0xFF111827),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          '${match.homeTeam} vs ${match.awayTeam}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isDark ? Colors.white : const Color(0xFF111827),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${match.betsCount} apuestas abiertas',
+                          style: const TextStyle(
+                            color: BetFlixColors.cyanBright,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CreateBetScreen(match: match),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.flash_on, size: 16),
+                            label: const Text('Apuesta rápida'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _trendingFilterChip(String value, String label, bool isDark) {
+    final selected = _trendingFilter == value;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      selectedColor: BetFlixColors.cyanBright,
+      labelStyle: TextStyle(
+        color: selected ? Colors.black : (isDark ? Colors.white : const Color(0xFF111827)),
+        fontWeight: FontWeight.w700,
+      ),
+      backgroundColor: isDark ? const Color(0xFF2A2A3E) : const Color(0xFFE5E7EB),
+      onSelected: (_) {
+        setState(() {
+          _trendingFilter = value;
+        });
+      },
+    );
+  }
+
   Widget _tournamentModeSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sectionTitleColor = isDark ? BetFlixColors.orangeVibrant : const Color(0xFF111827);
+    final infoText = isDark ? Colors.white70 : const Color(0xFF4B5563);
+
     return StreamBuilder<NeighborhoodSeason?>(
       stream: _activeSeasonStream,
       builder: (context, seasonSnapshot) {
@@ -481,10 +833,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   'Modo Torneo de Barrio',
                   style: TextStyle(
-                    color: BetFlixColors.orangeVibrant,
+                    color: sectionTitleColor,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
@@ -539,7 +891,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             const SizedBox(height: 6),
             Text(
               season == null ? 'Cargando temporada...' : 'Activa: ${season.name}',
-              style: const TextStyle(color: Colors.white70),
+              style: TextStyle(color: infoText),
             ),
             const SizedBox(height: AppConstants.paddingMedium),
             Container(
@@ -547,10 +899,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [
-                    const Color(0xFF2C233A),
-                    const Color(0xFF191726),
-                  ],
+                  colors: isDark
+                      ? const [Color(0xFF2C233A), Color(0xFF191726)]
+                      : const [Color(0xFFFFFFFF), Color(0xFFF3F4F6)],
                 ),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: BetFlixColors.orangeVibrant.withOpacity(0.3)),
@@ -572,9 +923,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
                         final table = snapshot.data ?? const <NeighborhoodTeamStanding>[];
                         if (table.isEmpty) {
-                          return const Text(
+                          return Text(
                             'Finaliza partidos personalizados para generar la clasificación del torneo.',
-                            style: TextStyle(color: Colors.white70),
+                            style: TextStyle(color: infoText),
                           );
                         }
 
@@ -598,14 +949,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                       flex: 4,
                                       child: Text(
                                         entry.teamName,
-                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                                        style: TextStyle(
+                                          color: isDark ? Colors.white : const Color(0xFF111827),
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ),
                                     Expanded(
-                                      child: Text('${entry.played}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+                                      child: Text(
+                                        '${entry.played}',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: infoText),
+                                      ),
                                     ),
                                     Expanded(
-                                      child: Text('${entry.goalDifference}', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+                                      child: Text(
+                                        '${entry.goalDifference}',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(color: infoText),
+                                      ),
                                     ),
                                     Expanded(
                                       child: Text('${entry.points}', textAlign: TextAlign.center, style: const TextStyle(color: BetFlixColors.goldYellow, fontWeight: FontWeight.bold)),
@@ -625,7 +987,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF202035),
+                  color: isDark ? const Color(0xFF202035) : Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.2)),
                 ),
@@ -634,9 +996,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   builder: (context, snapshot) {
                     final fixtures = snapshot.data ?? const <Match>[];
                     if (fixtures.isEmpty) {
-                      return const Text(
+                      return Text(
                         'No hay calendario generado todavía para esta temporada.',
-                        style: TextStyle(color: Colors.white70),
+                        style: TextStyle(color: infoText),
                       );
                     }
 
@@ -656,7 +1018,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             padding: const EdgeInsets.symmetric(vertical: 4),
                             child: Text(
                               'J${fixture.roundNumber ?? 0} • ${fixture.phase ?? 'regular'} • ${fixture.homeTeam} vs ${fixture.awayTeam}',
-                              style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              style: TextStyle(color: infoText, fontSize: 12),
                             ),
                           );
                         }).toList(),
@@ -813,17 +1175,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _infoPanel(String message) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: BetFlixColors.surfaceCard,
+        color: isDark ? BetFlixColors.surfaceCard : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.2)),
       ),
       child: Text(
         message,
-        style: const TextStyle(color: Colors.white70),
+        style: TextStyle(color: isDark ? Colors.white70 : const Color(0xFF4B5563)),
       ),
     );
   }

@@ -327,3 +327,25 @@ class SeasonChampionEntry {
     required this.championBonus,
   });
 }
+
+class CoinMovement {
+  final String id;
+  final String userId;
+  final String type;
+  final int amount;
+  final int balanceBefore;
+  final int balanceAfter;
+  final String description;
+  final DateTime createdAt;
+
+  CoinMovement({
+    required this.id,
+    required this.userId,
+    required this.type,
+    required this.amount,
+    required this.balanceBefore,
+    required this.balanceAfter,
+    required this.description,
+    required this.createdAt,
+  });
+}

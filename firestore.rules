@@ -11,7 +11,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAuthed();
-      allow create, update: if isOwner(userId);
+      allow create, update: if isAuthed();
       allow delete: if false;
     }
 
@@ -36,6 +36,12 @@ service cloud.firestore {
     }
 
     match /season_rewards/{rewardId} {
+      allow read: if isAuthed();
+      allow create, update: if isAuthed();
+      allow delete: if false;
+    }
+
+    match /coin_movements/{movementId} {
       allow read: if isAuthed();
       allow create, update: if isAuthed();
       allow delete: if false;

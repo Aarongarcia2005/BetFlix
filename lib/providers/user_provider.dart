@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 import '../models/models.dart';
 import '../services/auth_service.dart';
 
@@ -10,12 +11,52 @@ class UserProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _hasInitializedAuth = false;
   String? _errorMessage;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userDocSub;
 
   BetFlixUser? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   bool get hasInitializedAuth => _hasInitializedAuth;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _currentUser != null;
+
+  void _attachUserDocListener(String userId) {
+    _userDocSub?.cancel();
+    _userDocSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!snapshot.exists) return;
+      final data = snapshot.data();
+      if (data == null) return;
+
+      final existing = _currentUser;
+      final joinDateRaw = data['joinDate'];
+      DateTime joinDate = DateTime.now();
+      if (joinDateRaw is Timestamp) {
+        joinDate = joinDateRaw.toDate();
+      } else if (joinDateRaw is String) {
+        joinDate = DateTime.tryParse(joinDateRaw) ?? DateTime.now();
+      } else if (existing != null) {
+        joinDate = existing.joinDate;
+      }
+
+      _currentUser = BetFlixUser(
+        id: userId,
+        name: data['name'] ?? existing?.name ?? 'Usuario',
+        email: data['email'] ?? existing?.email ?? '',
+        profileImageUrl: data['profileImageUrl'] ?? existing?.profileImageUrl ?? '?',
+        coins: (data['coins'] as num?)?.toInt() ?? existing?.coins ?? 0,
+        winStreak: (data['winStreak'] as num?)?.toInt() ?? existing?.winStreak ?? 0,
+        totalBets: (data['totalBets'] as num?)?.toInt() ?? existing?.totalBets ?? 0,
+        correctBets: (data['correctBets'] as num?)?.toInt() ?? existing?.correctBets ?? 0,
+        level: (data['level'] as num?)?.toInt() ?? existing?.level ?? 1,
+        joinDate: joinDate,
+      );
+
+      notifyListeners();
+    });
+  }
 
   /// Demo Sign In (sin Firebase)
   Future<bool> signInDemo({
@@ -71,18 +112,26 @@ class UserProvider extends ChangeNotifier {
         throw 'No se pudo iniciar sesión demo. Reintenta.';
       }
 
-      await FirebaseFirestore.instance
+      final userDocRef = FirebaseFirestore.instance
           .collection('users')
-          .doc(firebaseUser.uid)
-          .set({
+          .doc(firebaseUser.uid);
+      final existingDoc = await userDocRef.get();
+      final existingData = existingDoc.data();
+      final existingCoins = (existingData?['coins'] as num?)?.toInt();
+      final existingTotalBets = (existingData?['totalBets'] as num?)?.toInt();
+      final existingCorrectBets = (existingData?['correctBets'] as num?)?.toInt();
+      final existingWinStreak = (existingData?['winStreak'] as num?)?.toInt();
+      final existingLevel = (existingData?['level'] as num?)?.toInt();
+
+      await userDocRef.set({
         'id': firebaseUser.uid,
         'name': name,
         'email': email,
-        'coins': 5000,
-        'winStreak': 0,
-        'totalBets': 0,
-        'correctBets': 0,
-        'level': 1,
+        'coins': existingCoins ?? 5000,
+        'winStreak': existingWinStreak ?? 0,
+        'totalBets': existingTotalBets ?? 0,
+        'correctBets': existingCorrectBets ?? 0,
+        'level': existingLevel ?? 1,
         'joinDate': DateTime.now().toIso8601String(),
         'profileImageUrl': name.isNotEmpty ? name[0].toUpperCase() : '?',
         'isDemo': true,
@@ -93,13 +142,14 @@ class UserProvider extends ChangeNotifier {
         name: name,
         email: email,
         profileImageUrl: name.isNotEmpty ? name[0].toUpperCase() : '?',
-        coins: 5000,
-        winStreak: 0,
-        totalBets: 0,
-        correctBets: 0,
-        level: 1,
+        coins: existingCoins ?? 5000,
+        winStreak: existingWinStreak ?? 0,
+        totalBets: existingTotalBets ?? 0,
+        correctBets: existingCorrectBets ?? 0,
+        level: existingLevel ?? 1,
         joinDate: DateTime.now(),
       );
+      _attachUserDocListener(firebaseUser.uid);
 
       _hasInitializedAuth = true;
       _isLoading = false;
@@ -142,6 +192,9 @@ class UserProvider extends ChangeNotifier {
         password: password,
         username: username,
       );
+      if (_currentUser != null) {
+        _attachUserDocListener(_currentUser!.id);
+      }
       _hasInitializedAuth = true;
       _isLoading = false;
       notifyListeners();
@@ -174,6 +227,9 @@ class UserProvider extends ChangeNotifier {
         email: email,
         password: password,
       );
+      if (_currentUser != null) {
+        _attachUserDocListener(_currentUser!.id);
+      }
       _isLoading = false;
       notifyListeners();
       return _currentUser != null;
@@ -191,6 +247,8 @@ class UserProvider extends ChangeNotifier {
   /// Sign Out
   Future<void> signOut() async {
     await _authService.logoutUser();
+    await _userDocSub?.cancel();
+    _userDocSub = null;
     _currentUser = null;
     _errorMessage = null;
     notifyListeners();
@@ -204,6 +262,9 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
     try {
       _currentUser = await _authService.getCurrentUser();
+      if (_currentUser != null) {
+        _attachUserDocListener(_currentUser!.id);
+      }
     } catch (e) {
       _errorMessage = e.toString();
     } finally {

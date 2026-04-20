@@ -7,6 +7,7 @@ import 'config/app_theme.dart';
 import 'config/app_constants.dart';
 import 'providers/user_provider.dart';
 import 'providers/bet_provider.dart';
+import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/ranking_screen.dart';
 import 'screens/challenges_screen.dart';
@@ -18,9 +19,13 @@ import 'screens/tournament_center_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } on FirebaseException catch (e) {
+    if (e.code != 'duplicate-app') rethrow;
+  }
   runApp(const MyApp());
 }
 
@@ -33,23 +38,27 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => UserProvider()),
         ChangeNotifierProvider(create: (_) => BetProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
-      child: MaterialApp(
-        title: AppConstants.appName,
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.dark,
-        home: const AuthWrapper(),
-        routes: {
-          '/home': (context) => const MainNavigationScreen(),
-          '/create-bet': (context) => const CreateBetScreen(),
-          '/active-bets': (context) => const ActiveBetsScreen(),
-          '/challenges': (context) => const ChallengesScreen(),
-          '/ranking': (context) => const RankingScreen(),
-          '/profile': (context) => const UserProfileScreen(),
-          '/tournament-center': (context) => const TournamentCenterScreen(),
-        },
-        debugShowCheckedModeBanner: false,
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, _) => MaterialApp(
+          title: AppConstants.appName,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: themeProvider.themeMode,
+          themeAnimationDuration: Duration.zero,
+          home: const AuthWrapper(),
+          routes: {
+            '/home': (context) => const MainNavigationScreen(),
+            '/create-bet': (context) => const CreateBetScreen(),
+            '/active-bets': (context) => const ActiveBetsScreen(),
+            '/challenges': (context) => const ChallengesScreen(),
+            '/ranking': (context) => const RankingScreen(),
+            '/profile': (context) => const UserProfileScreen(),
+            '/tournament-center': (context) => const TournamentCenterScreen(),
+          },
+          debugShowCheckedModeBanner: false,
+        ),
       ),
     );
   }
@@ -72,7 +81,7 @@ class AuthWrapper extends StatelessWidget {
           }
 
           return const Scaffold(
-            backgroundColor: BetFlixColors.background,
+            backgroundColor: Colors.transparent,
             body: Center(
               child: CircularProgressIndicator(color: BetFlixColors.cyanBright),
             ),
@@ -116,8 +125,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: BetFlixColors.background,
+      backgroundColor: colorScheme.background,
       body: _screens[_selectedIndex],
       bottomNavigationBar: Container(
         margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
@@ -125,11 +137,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           borderRadius: BorderRadius.circular(18),
           gradient: LinearGradient(
             colors: [
-              BetFlixColors.surfaceCardElevated,
-              BetFlixColors.surfaceCard,
+              isDark ? BetFlixColors.surfaceCardElevated : Colors.white,
+              isDark ? BetFlixColors.surfaceCard : const Color(0xFFF3F6FF),
             ],
           ),
-          border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.2)),
+          border: Border.all(
+            color: isDark
+                ? BetFlixColors.cyanBright.withOpacity(0.2)
+                : colorScheme.primary.withOpacity(0.25),
+          ),
           boxShadow: [
             BoxShadow(
               color: BetFlixColors.black.withOpacity(0.35),
@@ -149,8 +165,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           },
           backgroundColor: Colors.transparent,
           type: BottomNavigationBarType.fixed,
-          selectedItemColor: BetFlixColors.cyanBright,
-          unselectedItemColor: Colors.white.withOpacity(0.55),
+          selectedItemColor: isDark ? BetFlixColors.cyanBright : colorScheme.primary,
+          unselectedItemColor: isDark ? Colors.white.withOpacity(0.55) : Colors.black54,
           selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
           unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
           items: const [

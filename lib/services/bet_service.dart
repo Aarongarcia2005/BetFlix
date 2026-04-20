@@ -226,6 +226,29 @@ class BetService {
     return DateTime.now();
   }
 
+  Future<void> _recordCoinMovementBestEffort({
+    required String userId,
+    required String type,
+    required int amount,
+    required int balanceBefore,
+    required int balanceAfter,
+    required String description,
+  }) async {
+    try {
+      await _firestore.collection('coin_movements').add({
+      'userId': userId,
+      'type': type,
+      'amount': amount,
+      'balanceBefore': balanceBefore,
+      'balanceAfter': balanceAfter,
+      'description': description,
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+    } catch (_) {
+      // El ledger no debe romper operaciones críticas de apuesta/monedas.
+    }
+  }
+
   MatchStatus _matchStatusFromString(String? value) {
     switch (value) {
       case 'live':
@@ -836,36 +859,65 @@ class BetService {
       if (authUser.uid != userId) {
         throw 'Tu sesión está desactualizada. Cierra sesión y vuelve a entrar.';
       }
+      if (amount <= 0) {
+        throw 'El monto de apuesta debe ser mayor que cero.';
+      }
 
-      final batch = _firestore.batch();
       final betRef = _firestore.collection('bets').doc();
+      final matchRef = _firestore.collection('matches').doc(matchId);
+      final userRef = _firestore.collection('users').doc(userId);
 
-      batch.set(betRef, {
-        'userId': userId,
-        'matchId': matchId,
-        'betType': betType.toString().split('.').last,
-        'market': market.name,
-        'selection': selection,
-        'matchTitle': matchTitle,
-        'createdByUserId': createdByUserId,
-        'amount': amount,
-        'odds': odds,
-        'potentialWinnings': (amount * odds).toInt(),
-        'createdAt': DateTime.now().toIso8601String(),
-        'status': 'pending',
+      int? coinsBefore;
+      int? coinsAfter;
+
+      await _firestore.runTransaction((transaction) async {
+        final userSnap = await transaction.get(userRef);
+        if (!userSnap.exists) {
+          throw 'No se encontró el perfil de usuario.';
+        }
+
+        final userData = userSnap.data() as Map<String, dynamic>;
+        final currentCoins = (userData['coins'] as num?)?.toInt() ?? 0;
+        if (currentCoins < amount) {
+          throw 'No tienes suficientes monedas para realizar esta apuesta.';
+        }
+        final nextCoins = currentCoins - amount;
+        coinsBefore = currentCoins;
+        coinsAfter = nextCoins;
+
+        transaction.set(betRef, {
+          'userId': userId,
+          'matchId': matchId,
+          'betType': betType.toString().split('.').last,
+          'market': market.name,
+          'selection': selection,
+          'matchTitle': matchTitle,
+          'createdByUserId': createdByUserId,
+          'amount': amount,
+          'odds': odds,
+          'potentialWinnings': (amount * odds).toInt(),
+          'createdAt': DateTime.now().toIso8601String(),
+          'status': BetStatus.pending.name,
+        });
+
+        transaction.set(matchRef, {
+          'betsCount': FieldValue.increment(1),
+        }, SetOptions(merge: true));
+
+        transaction.set(userRef, {
+          'coins': nextCoins,
+          'totalBets': FieldValue.increment(1),
+        }, SetOptions(merge: true));
       });
 
-      final matchRef = _firestore.collection('matches').doc(matchId);
-      batch.set(matchRef, {
-        'betsCount': FieldValue.increment(1),
-      }, SetOptions(merge: true));
-
-      final userRef = _firestore.collection('users').doc(userId);
-      batch.set(userRef, {
-        'totalBets': FieldValue.increment(1),
-      }, SetOptions(merge: true));
-
-      await batch.commit();
+      await _recordCoinMovementBestEffort(
+        userId: userId,
+        type: 'bet_placed',
+        amount: -amount,
+        balanceBefore: coinsBefore ?? 0,
+        balanceAfter: coinsAfter ?? 0,
+        description: 'Apuesta creada para ${matchTitle ?? matchId}',
+      );
     } catch (e) {
       throw 'Error al crear apuesta: ${_mapFirestoreError(e)}';
     }
@@ -956,6 +1008,77 @@ class BetService {
     });
   }
 
+  Future<bool> cancelBet({
+    required String betId,
+    required String userId,
+  }) async {
+    try {
+      final betRef = _firestore.collection('bets').doc(betId);
+      final betSnapshot = await betRef.get();
+      if (!betSnapshot.exists) {
+        throw 'La apuesta no existe.';
+      }
+
+      final data = betSnapshot.data() as Map<String, dynamic>;
+      final ownerUserId = data['userId'] as String?;
+      if (ownerUserId != userId) {
+        throw 'Solo puedes cancelar tus propias apuestas.';
+      }
+
+      final status = data['status'] as String?;
+      if (status != BetStatus.pending.name) {
+        throw 'Solo se pueden cancelar apuestas pendientes.';
+      }
+
+      final amount = (data['amount'] as num?)?.toInt() ?? 0;
+      final userRef = _firestore.collection('users').doc(userId);
+
+      int? coinsBefore;
+      int? coinsAfter;
+
+      await _firestore.runTransaction((transaction) async {
+        final userSnap = await transaction.get(userRef);
+        final userData = userSnap.data() as Map<String, dynamic>?;
+        final currentCoins = (userData?['coins'] as num?)?.toInt() ?? 0;
+        final nextCoins = currentCoins + amount;
+        coinsBefore = currentCoins;
+        coinsAfter = nextCoins;
+
+        transaction.update(betRef, {
+          'status': BetStatus.cancelled.name,
+          'cancelledAt': DateTime.now().toIso8601String(),
+        });
+
+        transaction.set(userRef, {
+          'coins': nextCoins,
+        }, SetOptions(merge: true));
+      });
+
+      await _recordCoinMovementBestEffort(
+        userId: userId,
+        type: 'bet_cancelled_refund',
+        amount: amount,
+        balanceBefore: coinsBefore ?? 0,
+        balanceAfter: coinsAfter ?? 0,
+        description: 'Reembolso por cancelar apuesta',
+      );
+
+      return true;
+    } catch (e) {
+      throw 'Error al cancelar apuesta: ${_mapFirestoreError(e)}';
+    }
+  }
+
+  Future<Match?> getMatchById(String matchId) async {
+    try {
+      final doc = await _firestore.collection('matches').doc(matchId).get();
+      if (!doc.exists) return null;
+      return _matchFromDoc(doc);
+    } catch (e) {
+      throw 'Error al cargar detalles del partido: ${_mapFirestoreError(e)}';
+    }
+  }
+
   /// Obtener todas las apuestas del usuario
   Future<List<Bet>> getUserBets(String userId) async {
     try {
@@ -1027,12 +1150,58 @@ class BetService {
 
       if (won) {
         final userDocRef = _firestore.collection('users').doc(userId);
-        await userDocRef.set({
-          'coins': FieldValue.increment(potentialWinnings),
-          'correctBets': FieldValue.increment(1),
-        }, SetOptions(merge: true));
+        int? coinsBefore;
+        int? coinsAfter;
+        await _firestore.runTransaction((transaction) async {
+          final userSnap = await transaction.get(userDocRef);
+          final userData = userSnap.data() as Map<String, dynamic>?;
+          final currentCoins = (userData?['coins'] as num?)?.toInt() ?? 0;
+          final nextCoins = currentCoins + potentialWinnings;
+          coinsBefore = currentCoins;
+          coinsAfter = nextCoins;
+
+          transaction.set(userDocRef, {
+            'coins': nextCoins,
+            'correctBets': FieldValue.increment(1),
+          }, SetOptions(merge: true));
+        });
+
+        await _recordCoinMovementBestEffort(
+          userId: userId,
+          type: 'bet_won',
+          amount: potentialWinnings,
+          balanceBefore: coinsBefore ?? 0,
+          balanceAfter: coinsAfter ?? 0,
+          description: 'Premio de apuesta ganada (${match.homeTeam} vs ${match.awayTeam})',
+        );
       }
     }
+  }
+
+  Stream<List<CoinMovement>> getUserCoinMovementsStream(String userId) {
+    return _firestore
+        .collection('coin_movements')
+        .where('userId', isEqualTo: userId)
+        .limit(100)
+        .snapshots()
+        .map((snapshot) {
+      final items = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return CoinMovement(
+          id: doc.id,
+          userId: data['userId'] ?? userId,
+          type: data['type'] ?? 'unknown',
+          amount: (data['amount'] as num?)?.toInt() ?? 0,
+          balanceBefore: (data['balanceBefore'] as num?)?.toInt() ?? 0,
+          balanceAfter: (data['balanceAfter'] as num?)?.toInt() ?? 0,
+          description: data['description'] ?? 'Movimiento',
+          createdAt: _parseDateTime(data['createdAt']),
+        );
+      }).toList();
+
+      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return items;
+    });
   }
 
   bool _isBetWon({
@@ -1132,12 +1301,6 @@ class BetService {
 
   /// Obtener todas las apuestas para ranking
   Stream<List<RankingEntry>> getRankingStream() {
-    const sampleDemoEmails = {
-      'agarcia@gmail.com',
-      'jterreros@gmail.com',
-      'gblanco@gmail.com',
-    };
-
     return _firestore
         .collection('users')
         .orderBy('coins', descending: true)
@@ -1148,16 +1311,6 @@ class BetService {
       for (int i = 0; i < snapshot.docs.length; i++) {
         final doc = snapshot.docs[i];
         final data = doc.data();
-
-        final isDemo = data['isDemo'] == true;
-        final email = (data['email'] ?? '').toString().trim().toLowerCase();
-        final name = (data['name'] ?? '').toString().trim().toLowerCase();
-        final looksLikeSampleName = name == 'aaron garcia' ||
-            name == 'jan terreros' ||
-            name == 'gerard blanco';
-        if (isDemo || sampleDemoEmails.contains(email) || looksLikeSampleName) {
-          continue;
-        }
 
         entries.add(RankingEntry(
           position: entries.length + 1,

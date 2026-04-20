@@ -34,7 +34,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAIp9l_-7L6x5L6x5L6x5L6x5L6x5L6x5L',
+    apiKey: 'AIzaSyAGxqr_dQCvBhvYekcVhVTpDmWol8oyvlI',
     appId: '1:279904923799:android:c2a338013ea4457934f9d2',
     messagingSenderId: '279904923799',
     projectId: 'betflix-955fc',

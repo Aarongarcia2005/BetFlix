@@ -262,6 +262,7 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
     if (!mounted) return;
 
     if (success) {
+      await context.read<UserProvider>().loadCurrentUser();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(_creatorStatus == MatchStatus.finished
@@ -311,11 +312,36 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
       return;
     }
 
+    if (amount > user.coins) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Saldo insuficiente. Tienes ${user.coins} 🪙 y necesitas $amount 🪙.'),
+          backgroundColor: BetFlixColors.accentRed,
+        ),
+      );
+      return;
+    }
+
     final odds = _computeOdds(
       match: match,
       market: _selectedMarket,
       option: _selectedOption!,
     );
+    final potentialWinnings = (amount * odds).toInt();
+
+    final confirmed = await _confirmBetDialog(
+      matchTitle: '${match.homeTeam} vs ${match.awayTeam}',
+      marketLabel: _marketLabel(_selectedMarket),
+      selectionLabel: _selectedOption!,
+      amount: amount,
+      odds: odds,
+      potentialWinnings: potentialWinnings,
+      currentCoins: user.coins,
+    );
+
+    if (!confirmed) return;
+
+    final coinsBefore = user.coins;
 
     setState(() => _isSubmitting = true);
 
@@ -340,9 +366,13 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
     if (!mounted) return;
 
     if (success) {
+      await context.read<UserProvider>().loadCurrentUser();
+      final updatedCoins = context.read<UserProvider>().currentUser?.coins ?? (coinsBefore - amount);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Apuesta V2 creada con éxito.'),
+        SnackBar(
+          content: Text(
+            'Apuesta creada. Saldo: $coinsBefore → $updatedCoins 🪙 · Ganancia potencial: $potentialWinnings 🪙',
+          ),
           backgroundColor: BetFlixColors.greenLime,
         ),
       );
@@ -355,18 +385,78 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
     }
   }
 
+  Future<bool> _confirmBetDialog({
+    required String matchTitle,
+    required String marketLabel,
+    required String selectionLabel,
+    required int amount,
+    required double odds,
+    required int potentialWinnings,
+    required int currentCoins,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Confirmar apuesta'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Partido: $matchTitle'),
+              Text('Mercado: $marketLabel'),
+              Text('Selección: $selectionLabel'),
+              const SizedBox(height: 8),
+              Text('Monto: $amount 🪙'),
+              Text('Cuota: ${odds.toStringAsFixed(2)}x'),
+              Text('Ganancia potencial: $potentialWinnings 🪙'),
+              const SizedBox(height: 8),
+              Text('Saldo actual: $currentCoins 🪙'),
+              Text('Saldo tras apostar: ${currentCoins - amount} 🪙'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Confirmar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result == true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = context.watch<UserProvider>().currentUser;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pageGradient = isDark
+        ? BetFlixColors.pageGradient
+        : const [Color(0xFFF3F4F6), Color(0xFFE5E7EB), Color(0xFFF9FAFB)];
+    final primaryText = isDark ? Colors.white : const Color(0xFF111827);
+    final secondaryText = isDark ? Colors.white70 : const Color(0xFF4B5563);
+    final inputBg = isDark ? const Color(0xFF2A2A3E) : Colors.white;
+    final panelGradient = isDark
+        ? BetFlixColors.cardGradient
+        : const [Color(0xFFFFFFFF), Color(0xFFF3F4F6)];
+    final listItemGradient = isDark
+        ? const [Color(0xFF2A2A3E), Color(0xFF1A1A2E)]
+        : const [Color(0xFFFFFFFF), Color(0xFFF3F4F6)];
 
     return Scaffold(
-      backgroundColor: BetFlixColors.background,
+      backgroundColor: Theme.of(context).colorScheme.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Crear Apuesta V2',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
         ),
       ),
       body: StreamBuilder<List<Match>>(
@@ -393,7 +483,7 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: BetFlixColors.pageGradient,
+                colors: pageGradient,
               ),
             ),
             child: SingleChildScrollView(
@@ -415,9 +505,9 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: BetFlixColors.accentRed.withOpacity(0.45)),
                       ),
-                      child: const Text(
+                      child: Text(
                         'No se pudieron cargar los partidos abiertos. Puedes apostar en el partido seleccionado manualmente.',
-                        style: TextStyle(color: Colors.white70),
+                        style: TextStyle(color: secondaryText),
                       ),
                     ),
                   ),
@@ -440,13 +530,13 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF26263D),
+                            color: inputBg,
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: BetFlixColors.purpleVibrant.withOpacity(0.25)),
                           ),
                           child: Text(
                             'Inicio: ${_kickoff.day.toString().padLeft(2, '0')}/${_kickoff.month.toString().padLeft(2, '0')} ${_kickoff.hour.toString().padLeft(2, '0')}:${_kickoff.minute.toString().padLeft(2, '0')}',
-                            style: const TextStyle(color: Colors.white),
+                            style: TextStyle(color: primaryText),
                           ),
                         ),
                       ),
@@ -484,7 +574,7 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                           child: Text(
                             'Error al cargar partidos de Firestore. '
                             'Suele ser por reglas o índices.\n\nDetalle: ${snapshot.error}',
-                            style: const TextStyle(color: Colors.white),
+                            style: TextStyle(color: primaryText),
                           ),
                         )
                       : snapshot.connectionState == ConnectionState.waiting
@@ -495,9 +585,9 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                           ),
                         )
                       : matches.isEmpty
-                          ? const Text(
+                          ? Text(
                               'No hay partidos abiertos todavía. Crea uno arriba y entra en acción.',
-                              style: TextStyle(color: Colors.white70),
+                              style: TextStyle(color: secondaryText),
                             )
                           : Column(
                               children: matches.map((match) {
@@ -521,10 +611,7 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                                       gradient: isSelected
                                           ? BetFlixColors.vibrantGradientLinear
                                           : LinearGradient(
-                                              colors: [
-                                                const Color(0xFF2A2A3E),
-                                                const Color(0xFF1A1A2E),
-                                              ],
+                                              colors: listItemGradient,
                                             ),
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
@@ -539,15 +626,18 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                                             children: [
                                               Text(
                                                 '${match.homeTeam} vs ${match.awayTeam}',
-                                                style: const TextStyle(
-                                                  color: Colors.white,
+                                                style: TextStyle(
+                                                  color: isSelected ? Colors.white : primaryText,
                                                   fontWeight: FontWeight.w700,
                                                 ),
                                               ),
                                               const SizedBox(height: 4),
                                               Text(
                                                 '${match.league} • ${match.source == MatchSource.userCreated ? 'Creado por ${match.createdByName ?? 'usuario'}' : 'Generado por BetFlix'}',
-                                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                                style: TextStyle(
+                                                  color: isSelected ? Colors.white70 : secondaryText,
+                                                  fontSize: 12,
+                                                ),
                                               ),
                                             ],
                                           ),
@@ -588,13 +678,13 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                             const SizedBox(height: 10),
                             DropdownButtonFormField<String>(
                               value: _creatorFirstScorer.isEmpty ? null : _creatorFirstScorer,
-                              dropdownColor: const Color(0xFF2A2A3E),
-                              style: const TextStyle(color: Colors.white),
+                              dropdownColor: inputBg,
+                              style: TextStyle(color: primaryText),
                               decoration: InputDecoration(
                                 hintText: 'Equipo que marcó primero',
-                                hintStyle: const TextStyle(color: Colors.white54),
+                                hintStyle: TextStyle(color: secondaryText),
                                 filled: true,
-                                fillColor: const Color(0xFF2A2A3E),
+                                fillColor: inputBg,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(10),
                                   borderSide: BorderSide.none,
@@ -603,11 +693,11 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                               items: [
                                 DropdownMenuItem(
                                   value: selectedMatch.homeTeam,
-                                  child: Text(selectedMatch.homeTeam, style: const TextStyle(color: Colors.white)),
+                                  child: Text(selectedMatch.homeTeam, style: TextStyle(color: primaryText)),
                                 ),
                                 DropdownMenuItem(
                                   value: selectedMatch.awayTeam,
-                                  child: Text(selectedMatch.awayTeam, style: const TextStyle(color: Colors.white)),
+                                  child: Text(selectedMatch.awayTeam, style: TextStyle(color: primaryText)),
                                 ),
                               ],
                               onChanged: (value) {
@@ -619,30 +709,30 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                             const SizedBox(height: 10),
                             DropdownButtonFormField<MatchStatus>(
                               value: _creatorStatus,
-                              dropdownColor: const Color(0xFF2A2A3E),
-                              style: const TextStyle(color: Colors.white),
+                              dropdownColor: inputBg,
+                              style: TextStyle(color: primaryText),
                               decoration: InputDecoration(
                                 hintText: 'Estado del partido',
-                                hintStyle: const TextStyle(color: Colors.white54),
+                                hintStyle: TextStyle(color: secondaryText),
                                 filled: true,
-                                fillColor: const Color(0xFF2A2A3E),
+                                fillColor: inputBg,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(10),
                                   borderSide: BorderSide.none,
                                 ),
                               ),
-                              items: const [
+                              items: [
                                 DropdownMenuItem(
                                   value: MatchStatus.scheduled,
-                                  child: Text('Programado', style: TextStyle(color: Colors.white)),
+                                  child: Text('Programado', style: TextStyle(color: primaryText)),
                                 ),
                                 DropdownMenuItem(
                                   value: MatchStatus.live,
-                                  child: Text('En vivo', style: TextStyle(color: Colors.white)),
+                                  child: Text('En vivo', style: TextStyle(color: primaryText)),
                                 ),
                                 DropdownMenuItem(
                                   value: MatchStatus.finished,
-                                  child: Text('Finalizado (liquidar)', style: TextStyle(color: Colors.white)),
+                                  child: Text('Finalizado (liquidar)', style: TextStyle(color: primaryText)),
                                 ),
                               ],
                               onChanged: (value) {
@@ -675,7 +765,7 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                 _reveal(_sectionTitle('4) Mercados avanzados para apostar')),
                 _reveal(_panel(
                   child: selectedMatch == null
-                      ? const Text('Selecciona un partido para habilitar mercados.', style: TextStyle(color: Colors.white70))
+                      ? Text('Selecciona un partido para habilitar mercados.', style: TextStyle(color: secondaryText))
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -688,11 +778,11 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                                   label: Text(_marketLabel(market)),
                                   selected: selected,
                                   labelStyle: TextStyle(
-                                    color: selected ? Colors.black : BetFlixColors.cyanBright,
+                                    color: selected ? Colors.black : (isDark ? BetFlixColors.cyanBright : const Color(0xFF111827)),
                                     fontWeight: FontWeight.w700,
                                   ),
                                   selectedColor: BetFlixColors.cyanBright,
-                                  backgroundColor: const Color(0xFF292941),
+                                  backgroundColor: isDark ? const Color(0xFF292941) : const Color(0xFFE5E7EB),
                                   onSelected: (_) {
                                     setState(() {
                                       _selectedMarket = market;
@@ -718,7 +808,7 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: selected ? BetFlixColors.pinkBright : const Color(0xFF2A2A3E),
+                                      color: selected ? BetFlixColors.pinkBright : inputBg,
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
                                         color: selected ? BetFlixColors.pinkBright : BetFlixColors.purpleVibrant.withOpacity(0.3),
@@ -727,7 +817,7 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
                                     child: Text(
                                       '$option  •  ${odds.toStringAsFixed(2)}x',
                                       style: TextStyle(
-                                        color: selected ? Colors.white : BetFlixColors.cyanBright,
+                                        color: selected ? Colors.white : (isDark ? BetFlixColors.cyanBright : const Color(0xFF111827)),
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
@@ -771,12 +861,13 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
   }
 
   Widget _sectionTitle(String text) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         text,
-        style: const TextStyle(
-          color: BetFlixColors.cyanBright,
+        style: TextStyle(
+          color: isDark ? BetFlixColors.cyanBright : const Color(0xFF111827),
           fontWeight: FontWeight.bold,
           fontSize: 16,
         ),
@@ -785,12 +876,16 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
   }
 
   Widget _panel({required Widget child}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final panelGradient = isDark
+        ? BetFlixColors.cardGradient
+        : const [Color(0xFFFFFFFF), Color(0xFFF3F4F6)];
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: BetFlixColors.cardGradient,
+          colors: panelGradient,
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.16)),
@@ -821,15 +916,16 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
   }
 
   Widget _textInput(TextEditingController controller, String hint, {bool number = false}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return TextField(
       controller: controller,
       keyboardType: number ? TextInputType.number : TextInputType.text,
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: isDark ? Colors.white : const Color(0xFF111827)),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white54),
+        hintStyle: TextStyle(color: isDark ? Colors.white54 : const Color(0xFF6B7280)),
         filled: true,
-        fillColor: const Color(0xFF2A2A3E),
+        fillColor: isDark ? const Color(0xFF2A2A3E) : Colors.white,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide.none,

@@ -80,7 +80,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('¡Registro exitoso! Iniciando sesión...')),
       );
-      Navigator.of(context).pushReplacementNamed('/home');
+      // AuthWrapper realiza la transición a Home al detectar sesión iniciada.
+      // Evitar push manual previene duplicados de árbol y errores de GlobalKey.
+      return;
     } else {
       final error = context.read<UserProvider>().errorMessage ?? 'Error en registro';
       ScaffoldMessenger.of(context).showSnackBar(

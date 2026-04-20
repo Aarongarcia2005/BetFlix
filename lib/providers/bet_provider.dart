@@ -105,6 +105,10 @@ class BetProvider extends ChangeNotifier {
     return _betService.getSeasonChampionsHistoryStream();
   }
 
+  Stream<List<CoinMovement>> getUserCoinMovementsStream(String userId) {
+    return _betService.getUserCoinMovementsStream(userId);
+  }
+
   Future<void> seedRandomMatchesIfEmpty() async {
     await _betService.seedRandomMatchesIfEmpty();
   }
@@ -307,6 +311,32 @@ class BetProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<bool> cancelBet({
+    required String betId,
+    required String userId,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _betService.cancelBet(betId: betId, userId: userId);
+      await loadUserBets(userId);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<Match?> getMatchById(String matchId) {
+    return _betService.getMatchById(matchId);
   }
 
   /// Clear error

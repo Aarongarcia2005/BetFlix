@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "279904923799",
+    "project_id": "betflix-955fc",
+    "storage_bucket": "betflix-955fc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:279904923799:android:c2a338013ea4457934f9d2",
+        "android_client_info": {
+          "package_name": "betflix.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAGxqr_dQCvBhvYekcVhVTpDmWol8oyvlI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -7,23 +7,23 @@ class AppTheme {
     return ThemeData(
       // Esquema de colores
       colorScheme: ColorScheme.light(
-        primary: BetFlixColors.primaryBlue,
-        secondary: BetFlixColors.accentRed,
+        primary: const Color(0xFF111827),
+        secondary: const Color(0xFF2563EB),
         tertiary: BetFlixColors.goldYellow,
-        surface: BetFlixColors.surfaceLight,
-        background: BetFlixColors.background,
+        surface: const Color(0xFFFFFFFF),
+        background: const Color(0xFFF3F4F6),
         error: BetFlixColors.error,
-        outline: BetFlixColors.borderLight,
+        outline: const Color(0xFFD1D5DB),
       ),
 
       // AppBar
       appBarTheme: AppBarTheme(
-        backgroundColor: BetFlixColors.primaryBlue,
-        foregroundColor: BetFlixColors.white,
-        elevation: 2,
+        backgroundColor: const Color(0xFFF3F4F6),
+        foregroundColor: const Color(0xFF111827),
+        elevation: 0,
         centerTitle: true,
         titleTextStyle: const TextStyle(
-          color: BetFlixColors.white,
+          color: Color(0xFF111827),
           fontSize: 20,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.5,
@@ -32,10 +32,10 @@ class AppTheme {
 
       // Bottom Navigation
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: const Color(0xFF1A1A2E),
-        selectedItemColor: BetFlixColors.pinkBright,
-        unselectedItemColor: Colors.white.withOpacity(0.6),
-        elevation: 8,
+        backgroundColor: Colors.white,
+        selectedItemColor: Color(0xFF111827),
+        unselectedItemColor: Color(0xFF6B7280),
+        elevation: 2,
         selectedLabelStyle: const TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 12,
@@ -45,8 +45,8 @@ class AppTheme {
       // Botones
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: BetFlixColors.primaryBlue,
-          foregroundColor: BetFlixColors.white,
+          backgroundColor: const Color(0xFF111827),
+          foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -62,10 +62,10 @@ class AppTheme {
 
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: BetFlixColors.primaryBlue,
+          foregroundColor: const Color(0xFF111827),
           side: const BorderSide(
-            color: BetFlixColors.primaryBlue,
-            width: 2,
+            color: Color(0xFF9CA3AF),
+            width: 1.4,
           ),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           shape: RoundedRectangleBorder(
@@ -82,7 +82,7 @@ class AppTheme {
       // TextButton
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: BetFlixColors.primaryBlue,
+          foregroundColor: const Color(0xFF111827),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           textStyle: const TextStyle(
             fontSize: 14,
@@ -93,10 +93,11 @@ class AppTheme {
 
       // Card
       cardTheme: CardThemeData(
-        color: const Color(0xFF1A1A2E),
-        elevation: 2,
+        color: Colors.white,
+        elevation: 1,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFE5E7EB)),
         ),
         margin: const EdgeInsets.all(0),
       ),
@@ -104,23 +105,23 @@ class AppTheme {
       // Input Decoration
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: BetFlixColors.surfaceDark,
+        fillColor: const Color(0xFFFFFFFF),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(
-            color: BetFlixColors.borderLight,
+            color: Color(0xFFD1D5DB),
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(
-            color: BetFlixColors.borderLight,
+            color: Color(0xFFD1D5DB),
           ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(
-            color: BetFlixColors.primaryBlue,
+            color: Color(0xFF111827),
             width: 2,
           ),
         ),
@@ -137,7 +138,7 @@ class AppTheme {
           fontWeight: FontWeight.w500,
         ),
         labelStyle: const TextStyle(
-          color: BetFlixColors.primaryBlue,
+          color: Color(0xFF111827),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -238,8 +239,8 @@ class AppTheme {
       // Otros temas
       useMaterial3: true,
       brightness: Brightness.light,
-      scaffoldBackgroundColor: BetFlixColors.background,
-      dividerColor: BetFlixColors.borderLight,
+      scaffoldBackgroundColor: const Color(0xFFF3F4F6),
+      dividerColor: const Color(0xFFE5E7EB),
       shadowColor: Colors.black12,
     );
   }

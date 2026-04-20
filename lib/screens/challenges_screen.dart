@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../config/colors.dart';
 import '../config/app_constants.dart';
-import '../config/app_theme.dart';
 import '../models/models.dart';
 import '../widgets/betflix_widgets.dart';
 
@@ -85,14 +84,19 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDark ? Colors.white : const Color(0xFF172033);
+    final tabBackground = isDark ? const Color(0xFF1A1A2E) : const Color(0xFFEAF0FF);
+    final tabInactiveColor = isDark ? Colors.white.withOpacity(0.6) : const Color(0xFF5A6683);
+
     return Scaffold(
-      backgroundColor: BetFlixColors.background,
+      backgroundColor: Theme.of(context).colorScheme.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Retos y Desafíos',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: titleColor, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
       ),
@@ -100,7 +104,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
         children: [
           // Tabs
           Container(
-            color: const Color(0xFF1A1A2E),
+            color: tabBackground,
             child: Row(
               children: [
                 Expanded(
@@ -128,7 +132,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                         style: TextStyle(
                           color: selectedTabIndex == 0
                               ? BetFlixColors.cyanBright
-                              : Colors.white.withOpacity(0.6),
+                              : tabInactiveColor,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -160,7 +164,7 @@ class _ChallengesScreenState extends State<ChallengesScreen> {
                         style: TextStyle(
                           color: selectedTabIndex == 1
                               ? BetFlixColors.cyanBright
-                              : Colors.white.withOpacity(0.6),
+                              : tabInactiveColor,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

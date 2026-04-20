@@ -66,7 +66,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (success) {
-      Navigator.of(context).pushReplacementNamed('/home');
+      // AuthWrapper escucha el estado de autenticación y cambia a Home automáticamente.
+      // Evitamos navegación manual duplicada para prevenir conflictos de árboles/widgets.
+      return;
     } else {
       final error = context.read<UserProvider>().errorMessage ?? 'Error en login';
       ScaffoldMessenger.of(context).showSnackBar(
@@ -82,16 +84,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgGradient = isDark
+        ? [BetFlixColors.background, BetFlixColors.surfaceCard]
+        : const [Color(0xFFF6F8FF), Color(0xFFE8EEFF)];
+    final panelGradient = isDark
+        ? [
+            BetFlixColors.surfaceCardElevated.withOpacity(0.9),
+            BetFlixColors.surfaceCard.withOpacity(0.92),
+          ]
+        : [Colors.white.withOpacity(0.96), const Color(0xFFF4F7FF).withOpacity(0.98)];
+    final inputFillColor = isDark ? const Color(0xFF2A2A3E) : const Color(0xFFEFF3FF);
+    final mainTextColor = isDark ? Colors.white : const Color(0xFF172033);
+    final secondaryTextColor = isDark ? Colors.white70 : const Color(0xFF45506A);
+
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              BetFlixColors.background,
-              BetFlixColors.surfaceCard,
-            ],
+            colors: bgGradient,
           ),
         ),
         child: Center(
@@ -102,12 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      BetFlixColors.surfaceCardElevated.withOpacity(0.9),
-                      BetFlixColors.surfaceCard.withOpacity(0.92),
-                    ],
-                  ),
+                  gradient: LinearGradient(colors: panelGradient),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.2)),
                 ),
@@ -149,12 +157,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Email Input
                 TextField(
                   controller: _emailController,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: mainTextColor),
                   decoration: InputDecoration(
                     hintText: 'Email',
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+                    hintStyle: TextStyle(color: secondaryTextColor),
                     filled: true,
-                    fillColor: const Color(0xFF2A2A3E),
+                    fillColor: inputFillColor,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(color: BetFlixColors.purpleVibrant),
@@ -176,12 +184,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _passwordController,
                   obscureText: !_passwordVisible,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: mainTextColor),
                   decoration: InputDecoration(
                     hintText: 'Contraseña',
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+                    hintStyle: TextStyle(color: secondaryTextColor),
                     filled: true,
-                    fillColor: const Color(0xFF2A2A3E),
+                    fillColor: inputFillColor,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(color: BetFlixColors.purpleVibrant),
@@ -238,7 +246,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: BoxDecoration(
                     border: Border.all(color: BetFlixColors.cyanBright.withOpacity(0.35)),
                     borderRadius: BorderRadius.circular(12),
-                    color: const Color(0xFF2A2A3E).withOpacity(0.35),
+                    color: inputFillColor.withOpacity(0.35),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,7 +265,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1A1A2E),
+                              color: isDark ? const Color(0xFF1A1A2E) : const Color(0xFFE7EEFF),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: BetFlixColors.purpleVibrant.withOpacity(0.3),
@@ -280,15 +288,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                     children: [
                                       Text(
                                         user['name'] ?? '',
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                        style: TextStyle(
+                                          color: mainTextColor,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
                                       Text(
                                         user['email'] ?? '',
                                         style: TextStyle(
-                                          color: Colors.white.withOpacity(0.6),
+                                          color: secondaryTextColor,
                                           fontSize: 12,
                                         ),
                                       ),
@@ -316,7 +324,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Text(
                       '¿No tienes cuenta? ',
-                      style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                      style: TextStyle(color: secondaryTextColor),
                     ),
                     GestureDetector(
                       onTap: () => Navigator.of(context).push(

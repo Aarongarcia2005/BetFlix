@@ -52,15 +52,21 @@ class _ActiveBetsScreenState extends State<ActiveBetsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pageGradient = isDark
+        ? BetFlixColors.pageGradient
+        : const [Color(0xFFF6F8FF), Color(0xFFEAF0FF), Color(0xFFDDE8FF)];
+    final titleColor = isDark ? Colors.white : const Color(0xFF172033);
+
     return Scaffold(
-      backgroundColor: BetFlixColors.background,
+      backgroundColor: Theme.of(context).colorScheme.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Mis Apuestas Activas',
           style: TextStyle(
-            color: Colors.white,
+            color: titleColor,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -71,7 +77,7 @@ class _ActiveBetsScreenState extends State<ActiveBetsScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: BetFlixColors.pageGradient,
+            colors: pageGradient,
           ),
         ),
         child: Consumer2<UserProvider, BetProvider>(
@@ -178,7 +184,7 @@ class _ActiveBetsScreenState extends State<ActiveBetsScreen> {
                               margin: const EdgeInsets.only(bottom: 10),
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF1D1D32),
+                                color: isDark ? const Color(0xFF1D1D32) : Colors.white,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: BetFlixColors.purpleVibrant.withOpacity(0.28)),
                               ),
@@ -190,16 +196,16 @@ class _ActiveBetsScreenState extends State<ActiveBetsScreen> {
                                       children: [
                                         Text(
                                           '${match.homeTeam} vs ${match.awayTeam}',
-                                          style: const TextStyle(
-                                            color: Colors.white,
+                                          style: TextStyle(
+                                            color: titleColor,
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
                                           'Creador: ${match.createdByName ?? 'Comunidad'} • ${match.betsCount} apuestas',
-                                          style: const TextStyle(
-                                            color: Colors.white70,
+                                          style: TextStyle(
+                                            color: isDark ? Colors.white70 : const Color(0xFF5A6683),
                                             fontSize: 12,
                                           ),
                                         ),
@@ -256,11 +262,14 @@ class _ActiveBetsScreenState extends State<ActiveBetsScreen> {
   }
 
   Widget _neighborhoodCoreSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF2A213D), Color(0xFF1A1629)],
+        gradient: LinearGradient(
+          colors: isDark
+              ? const [Color(0xFF2A213D), Color(0xFF1A1629)]
+              : const [Color(0xFFF1F5FF), Color(0xFFE5ECFF)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -279,9 +288,12 @@ class _ActiveBetsScreenState extends State<ActiveBetsScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Crea tu propio partido con nombres reales del barrio y deja que toda la comunidad entre a apostar.',
-            style: TextStyle(color: Colors.white70, fontSize: 13),
+            style: TextStyle(
+              color: isDark ? Colors.white70 : const Color(0xFF4C5874),
+              fontSize: 13,
+            ),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -315,11 +327,12 @@ class _ActiveBetsScreenState extends State<ActiveBetsScreen> {
     required String title,
     required String subtitle,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2E),
+        color: isDark ? const Color(0xFF1A1A2E) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: BetFlixColors.purpleVibrant.withOpacity(0.25)),
       ),
@@ -333,15 +346,18 @@ class _ActiveBetsScreenState extends State<ActiveBetsScreen> {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : const Color(0xFF172033),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : const Color(0xFF5A6683),
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -422,8 +438,115 @@ class _BetCard extends StatelessWidget {
     }
   }
 
+  Future<void> _cancelBet(BuildContext context) async {
+    final userId = context.read<UserProvider>().currentUser?.id;
+    if (userId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay sesión activa.')),
+      );
+      return;
+    }
+
+    final success = await context.read<BetProvider>().cancelBet(
+          betId: bet.id,
+          userId: userId,
+        );
+
+    if (!context.mounted) return;
+
+    if (success) {
+      await context.read<UserProvider>().loadCurrentUser();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Apuesta cancelada correctamente.')),
+      );
+      return;
+    }
+
+    final error = context.read<BetProvider>().errorMessage ?? 'No se pudo cancelar la apuesta.';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error)),
+    );
+  }
+
+  Future<void> _showBetDetails(BuildContext context) async {
+    Match? match;
+    String? lookupError;
+
+    try {
+      match = await context.read<BetProvider>().getMatchById(bet.matchId);
+    } catch (e) {
+      lookupError = e.toString();
+    }
+
+    if (!context.mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Detalle de apuesta',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Text('Partido: ${bet.matchTitle ?? 'Sin título'}'),
+                Text('Mercado: ${_marketLabel(bet.market)}'),
+                Text('Selección: ${bet.selection.isEmpty ? bet.betType.name : bet.selection}'),
+                Text('Monto: ${bet.amount} 🪙'),
+                Text('Cuota: ${bet.odds.toStringAsFixed(2)}x'),
+                Text('Ganancia potencial: ${bet.potentialWinnings ?? (bet.amount * bet.odds).toInt()} 🪙'),
+                Text('Estado: ${_getStatusText(bet.status)}'),
+                if (lookupError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    lookupError!,
+                    style: const TextStyle(color: BetFlixColors.accentRed),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: match == null
+                        ? null
+                        : () {
+                            Navigator.pop(sheetContext);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => CreateBetScreen(match: match),
+                              ),
+                            );
+                          },
+                    icon: const Icon(Icons.sports_soccer),
+                    label: const Text('Ir al partido'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final primaryText = isDark ? Colors.white : const Color(0xFF172033);
+    final secondaryText = isDark ? Colors.white70 : const Color(0xFF5A6683);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -431,7 +554,9 @@ class _BetCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: BetFlixColors.cardGradient,
+          colors: isDark
+              ? BetFlixColors.cardGradient
+              : const [Color(0xFFFFFFFF), Color(0xFFF1F5FF)],
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
@@ -460,8 +585,8 @@ class _BetCard extends StatelessWidget {
                       bet.matchTitle?.isNotEmpty == true
                           ? bet.matchTitle!
                           : 'Apuesta #${bet.id.substring(0, 8)}',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: primaryText,
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
                       ),
@@ -471,7 +596,7 @@ class _BetCard extends StatelessWidget {
                       bet.createdAt.day.toString().padLeft(2, '0') +
                           '/${bet.createdAt.month.toString().padLeft(2, '0')}/${bet.createdAt.year}',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.6),
+                        color: secondaryText,
                         fontSize: 12,
                       ),
                     ),
@@ -508,7 +633,7 @@ class _BetCard extends StatelessWidget {
                     Text(
                       'Monto Apostado',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
+                        color: secondaryText,
                         fontSize: 12,
                       ),
                     ),
@@ -531,7 +656,7 @@ class _BetCard extends StatelessWidget {
                     Text(
                       'Cuota',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
+                        color: secondaryText,
                         fontSize: 12,
                       ),
                     ),
@@ -554,7 +679,7 @@ class _BetCard extends StatelessWidget {
                     Text(
                       'Ganancia Potencial',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
+                        color: secondaryText,
                         fontSize: 12,
                       ),
                     ),
@@ -578,7 +703,7 @@ class _BetCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: isDark ? Colors.white.withOpacity(0.1) : const Color(0xFFEAF0FF),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -610,7 +735,7 @@ class _BetCard extends StatelessWidget {
               child: Text(
                 'Partido creado por: ${bet.createdByUserId == 'system' ? 'BetFlix Engine' : bet.createdByUserId}',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.65),
+                  color: secondaryText,
                   fontSize: 11,
                 ),
               ),
@@ -623,9 +748,7 @@ class _BetCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () {
-                      // Cancelar apuesta
-                    },
+                    onPressed: () => _cancelBet(context),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: BetFlixColors.accentRed),
                       shape: RoundedRectangleBorder(
@@ -641,9 +764,7 @@ class _BetCard extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {
-                      // Ver detalles
-                    },
+                    onPressed: () => _showBetDetails(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: BetFlixColors.cyanBright,
                       shape: RoundedRectangleBorder(

@@ -18,15 +18,18 @@ class RankingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentUserId = context.watch<UserProvider>().currentUser?.id;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = isDark ? Colors.white : const Color(0xFF172033);
+    final secondaryTextColor = isDark ? Colors.white70 : const Color(0xFF45506A);
 
     return Scaffold(
-      backgroundColor: BetFlixColors.background,
+      backgroundColor: Theme.of(context).colorScheme.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Ranking Global',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(color: titleColor, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
       ),
@@ -40,7 +43,7 @@ class RankingScreen extends StatelessWidget {
                 child: Text(
                   'No se pudo cargar el ranking.\nDetalle: ${snapshot.error}',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: titleColor),
                 ),
               ),
             );
@@ -60,10 +63,10 @@ class RankingScreen extends StatelessWidget {
               .toList();
 
           if (entries.isEmpty) {
-            return const Center(
+            return Center(
               child: Text(
                 'Todavía no hay usuarios reales en el ranking.',
-                style: TextStyle(color: Colors.white70),
+                style: TextStyle(color: secondaryTextColor),
               ),
             );
           }
@@ -96,8 +99,8 @@ class RankingScreen extends StatelessWidget {
                             ? BetFlixColors.purpleGradientLinear
                             : LinearGradient(
                                 colors: [
-                                  const Color(0xFF2A2A3E),
-                                  const Color(0xFF1A1A2E),
+                                  isDark ? const Color(0xFF2A2A3E) : const Color(0xFFF6F8FF),
+                                  isDark ? const Color(0xFF1A1A2E) : const Color(0xFFE8EEFF),
                                 ],
                               ),
                         borderRadius: BorderRadius.circular(AppConstants.borderRadiusLarge),
@@ -123,7 +126,9 @@ class RankingScreen extends StatelessWidget {
                               child: Text(
                                 '${entry.position}',
                                 style: TextStyle(
-                                  color: isTopThree ? BetFlixColors.background : Colors.white,
+                                  color: isTopThree
+                                      ? (isDark ? BetFlixColors.background : Colors.white)
+                                      : titleColor,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -141,9 +146,9 @@ class RankingScreen extends StatelessWidget {
                             child: Center(
                               child: Text(
                                 _avatarText(entry.profileImageUrl),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                                  color: titleColor,
                                   fontSize: 18,
                                 ),
                               ),
@@ -156,10 +161,10 @@ class RankingScreen extends StatelessWidget {
                               children: [
                                 Text(
                                   isMe ? '${entry.userName} (Tú)' : entry.userName,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
-                                    color: Colors.white,
+                                    color: titleColor,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -167,7 +172,7 @@ class RankingScreen extends StatelessWidget {
                                   '${successRate.toStringAsFixed(0)}% acierto • ${entry.correctBets}/${entry.totalBets}',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.white.withOpacity(0.7),
+                                    color: secondaryTextColor,
                                   ),
                                 ),
                               ],
