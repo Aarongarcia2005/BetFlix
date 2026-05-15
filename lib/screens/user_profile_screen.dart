@@ -5,6 +5,7 @@ import '../config/app_constants.dart';
 import '../config/colors.dart';
 import '../models/models.dart';
 import '../providers/bet_provider.dart';
+import '../providers/theme_provider.dart';
 import '../providers/user_provider.dart';
 import 'login_screen.dart';
 
@@ -18,9 +19,60 @@ class UserProfileScreen extends StatefulWidget {
 class _UserProfileScreenState extends State<UserProfileScreen> {
   final TextEditingController _nameController = TextEditingController();
   String _selectedAvatar = '🙂';
-  bool _isEditing = false;
+  String _selectedLanguage = 'es';
   String _avatarFilter = 'todos';
   String _movementFilter = 'all';
+
+  static const Map<String, String> _languageLabels = {
+    'es': 'Español',
+    'ca': 'Català',
+    'en': 'English',
+  };
+
+  String _t(String key) {
+    const localized = {
+      'es': {
+        'profileTitle': 'Mi Perfil',
+        'editProfile': 'Editar perfil',
+        'settings': 'Ajustes',
+        'saveProfile': 'Guardar perfil',
+        'nameHint': 'Tu nombre',
+        'selectAvatar': 'Elige tu avatar',
+        'darkMode': 'Modo claro',
+        'themeDescription': 'Activa para tema claro',
+        'languageTitle': 'Idioma',
+        'languageDescription': 'Selecciona idioma',
+        'close': 'Cerrar',
+      },
+      'ca': {
+        'profileTitle': 'El meu Perfil',
+        'editProfile': 'Editar perfil',
+        'settings': 'Ajustos',
+        'saveProfile': 'Desa el perfil',
+        'nameHint': 'El teu nom',
+        'selectAvatar': 'Tria el teu avatar',
+        'darkMode': 'Mode clar',
+        'themeDescription': 'Activa per tema clar',
+        'languageTitle': 'Idioma',
+        'languageDescription': 'Selecciona idioma',
+        'close': 'Tancar',
+      },
+      'en': {
+        'profileTitle': 'My Profile',
+        'editProfile': 'Edit profile',
+        'settings': 'Settings',
+        'saveProfile': 'Save profile',
+        'nameHint': 'Your name',
+        'selectAvatar': 'Choose your avatar',
+        'darkMode': 'Light mode',
+        'themeDescription': 'Turn on for light theme',
+        'languageTitle': 'Language',
+        'languageDescription': 'Choose language',
+        'close': 'Close',
+      },
+    };
+    return localized[_selectedLanguage]?[key] ?? key;
+  }
 
   static const List<String> _maleAvatars = [
     '🧑‍🦱', '🧑‍🦰', '🧑‍🦲', '🧔', '👨‍💼', '👨‍🎤', '👨‍🎨', '👨‍🚀',
@@ -52,43 +104,211 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   void _syncFromUser(BetFlixUser user) {
-    if (!_isEditing) {
-      _nameController.text = user.name;
-      _selectedAvatar = user.profileImageUrl.isNotEmpty ? user.profileImageUrl : '🙂';
-    }
+    _nameController.text = user.name;
+    _selectedAvatar = user.profileImageUrl.isNotEmpty ? user.profileImageUrl : '🙂';
   }
 
-  Future<void> _saveProfile() async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El nombre no puede estar vacío.')),
-      );
-      return;
-    }
+  Widget _editFilterChip(String value, String label, String currentFilter, void Function(void Function()) setSheetState) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selected = currentFilter == value;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      selectedColor: BetFlixColors.cyanBright,
+      labelStyle: TextStyle(
+        color: selected ? Colors.black : (isDark ? Colors.white : const Color(0xFF172033)),
+        fontWeight: FontWeight.w700,
+      ),
+      backgroundColor: isDark ? const Color(0xFF2A2A3E) : const Color(0xFFEAF0FF),
+      onSelected: (_) => setSheetState(() {
+        avatarFilter = value;
+      }),
+    );
+  }
 
-    final success = await context.read<UserProvider>().updateProfile(
-          name: name,
-          profileImageUrl: _selectedAvatar,
+  void _showEditProfileMenu(BetFlixUser user) {
+    String selectedAvatar = user.profileImageUrl.isNotEmpty ? user.profileImageUrl : '🙂';
+    String name = user.name;
+    String avatarFilter = 'todos';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryText = isDark ? Colors.white : const Color(0xFF172033);
+            final secondaryText = isDark ? Colors.white70 : const Color(0xFF6B7280);
+            final filteredAvatars = () {
+              switch (avatarFilter) {
+                case 'chico':
+                  return _maleAvatars;
+                case 'chica':
+                  return _femaleAvatars;
+                case 'estilo':
+                  return _styleAvatars;
+                default:
+                  return [..._maleAvatars, ..._femaleAvatars, ..._styleAvatars];
+              }
+            }();
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 18,
+                right: 18,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 48,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).dividerColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    _t('editProfile'),
+                    style: TextStyle(
+                      color: primaryText,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Ajusta tu nombre y avatar para que tu perfil destaque más.',
+                    style: TextStyle(color: secondaryText, fontSize: 14),
+                  ),
+                  const SizedBox(height: 18),
+                  TextField(
+                    controller: TextEditingController(text: name),
+                    onChanged: (value) => name = value,
+                    decoration: InputDecoration(
+                      labelText: _t('nameHint'),
+                      filled: true,
+                      fillColor: isDark ? const Color(0xFF1F1F32) : const Color(0xFFF7F9FF),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    _t('selectAvatar'),
+                    style: TextStyle(
+                      color: primaryText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _editFilterChip('todos', 'Todos', avatarFilter, setSheetState),
+                      _editFilterChip('chico', 'Chico', avatarFilter, setSheetState),
+                      _editFilterChip('chica', 'Chica', avatarFilter, setSheetState),
+                      _editFilterChip('estilo', 'Estilo', avatarFilter, setSheetState),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF1C1C30) : const Color(0xFFF8FAFF),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: filteredAvatars.length,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 6,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 1,
+                      ),
+                      itemBuilder: (_, index) {
+                        final avatar = filteredAvatars[index];
+                        final selected = avatar == selectedAvatar;
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => setSheetState(() => selectedAvatar = avatar),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 220),
+                            decoration: BoxDecoration(
+                              color: selected ? BetFlixColors.pinkBright.withOpacity(0.25) : (isDark ? const Color(0xFF2A2A3E) : const Color(0xFFFFFFFF)),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: selected ? BetFlixColors.pinkBright : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                            child: Center(child: Text(avatar, style: const TextStyle(fontSize: 24))),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        if (name.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('El nombre no puede estar vacío.')),
+                          );
+                          return;
+                        }
+                        final success = await context.read<UserProvider>().updateProfile(
+                              name: name.trim(),
+                              profileImageUrl: selectedAvatar,
+                            );
+                        if (!mounted) return;
+                        if (success) {
+                          Navigator.of(context).pop();
+                          setState(() => _syncFromUser(context.read<UserProvider>().currentUser!));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Perfil actualizado.'), backgroundColor: BetFlixColors.success),
+                          );
+                        } else {
+                          final err = context.read<UserProvider>().errorMessage ?? 'No se pudo guardar el perfil.';
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(err), backgroundColor: BetFlixColors.accentRed),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: BetFlixColors.pinkBright,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      icon: const Icon(Icons.check, color: Colors.white),
+                      label: Text(_t('saveProfile'), style: const TextStyle(color: Colors.white)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            );
+          },
         );
-
-    if (!mounted) return;
-
-    if (success) {
-      setState(() => _isEditing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Perfil actualizado.'),
-          backgroundColor: BetFlixColors.success,
-        ),
-      );
-    } else {
-      final err = context.read<UserProvider>().errorMessage ?? 'No se pudo guardar el perfil.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(err), backgroundColor: BetFlixColors.accentRed),
-      );
-    }
+      },
+    );
   }
+
 
   Future<void> _logout() async {
     await context.read<UserProvider>().signOut();
@@ -121,18 +341,21 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
       appBar: AppBar(
-        title: const Text('Mi Perfil'),
+        title: Text(_t('profileTitle')),
         actions: [
-          IconButton(
-            icon: Icon(_isEditing ? Icons.close : Icons.edit),
-            onPressed: () {
-              setState(() {
-                _isEditing = !_isEditing;
-                if (!_isEditing) {
-                  _syncFromUser(user);
-                }
-              });
-            },
+          Tooltip(
+            message: _t('editProfile'),
+            child: IconButton(
+              icon: const Icon(Icons.edit_rounded),
+              onPressed: () => _showEditProfileMenu(user),
+            ),
+          ),
+          Tooltip(
+            message: _t('settings'),
+            child: IconButton(
+              icon: const Icon(Icons.settings_rounded),
+              onPressed: _showSettingsMenu,
+            ),
           ),
         ],
       ),
@@ -172,26 +395,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  if (_isEditing)
-                    TextField(
-                      controller: _nameController,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
-                      decoration: InputDecoration(
-                        hintText: 'Tu nombre',
-                        hintStyle: TextStyle(color: secondaryText),
-                        border: InputBorder.none,
-                      ),
-                    )
-                  else
-                    Text(
-                      user.name,
-                      style: TextStyle(
-                        color: primaryText,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  Text(
+                    user.name,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: primaryText,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
                   Text(
                     user.email,
                     style: const TextStyle(color: BetFlixColors.cyanBright),
@@ -214,76 +426,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            if (_isEditing) ...[
-              const Text(
-                'Elige tu avatar',
-                style: TextStyle(
-                  color: BetFlixColors.cyanBright,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _showEditProfileMenu(user),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: BetFlixColors.cyanBright,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
+                icon: const Icon(Icons.edit_rounded, color: Colors.white),
+                label: Text(_t('editProfile'), style: const TextStyle(color: Colors.white)),
               ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                children: [
-                  _filterChip('todos', 'Todos'),
-                  _filterChip('chico', 'Chico'),
-                  _filterChip('chica', 'Chica'),
-                  _filterChip('estilo', 'Estilo'),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1C1C30) : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: BetFlixColors.purpleVibrant.withOpacity(0.3)),
-                ),
-                child: GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _filteredAvatars.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 6,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
-                  itemBuilder: (_, index) {
-                    final avatar = _filteredAvatars[index];
-                    final selected = avatar == _selectedAvatar;
-                    return InkWell(
-                      onTap: () => setState(() => _selectedAvatar = avatar),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? BetFlixColors.pinkBright.withOpacity(0.25)
-                              : (isDark ? const Color(0xFF2A2A3E) : const Color(0xFFEAF0FF)),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: selected ? BetFlixColors.pinkBright : Colors.transparent,
-                            width: 2,
-                          ),
-                        ),
-                        child: Center(child: Text(avatar, style: const TextStyle(fontSize: 24))),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: provider.isLoading ? null : _saveProfile,
-                  style: ElevatedButton.styleFrom(backgroundColor: BetFlixColors.pinkBright),
-                  icon: const Icon(Icons.save, color: Colors.white),
-                  label: const Text('Guardar perfil', style: TextStyle(color: Colors.white)),
-                ),
-              ),
-            ],
+            ),
             const SizedBox(height: 20),
             _statsPanel(user),
             const SizedBox(height: 16),

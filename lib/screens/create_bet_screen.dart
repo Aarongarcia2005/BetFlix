@@ -5,6 +5,7 @@ import '../config/app_constants.dart';
 import '../config/colors.dart';
 import '../models/models.dart';
 import '../providers/bet_provider.dart';
+import '../providers/theme_provider.dart';
 import '../providers/user_provider.dart';
 
 class CreateBetScreen extends StatefulWidget {
@@ -34,6 +35,52 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
   bool _isUpdatingStats = false;
   MatchStatus _creatorStatus = MatchStatus.live;
   String _creatorFirstScorer = '';
+  String _selectedLanguage = 'es';
+
+  static const Map<String, String> _languageLabels = {
+    'es': 'Español',
+    'ca': 'Català',
+    'en': 'English',
+  };
+
+  String _t(String key) {
+    const localized = {
+      'es': {
+        'appBarTitle': 'Crear Apuesta V2',
+        'appBarSubtitle': 'Tema y idioma al alcance',
+        'settingsTitle': 'Ajustes',
+        'settingsSubtitle': 'Personaliza tema e idioma',
+        'themeTitle': 'Modo claro',
+        'themeDescription': 'Activa para usar el tema claro',
+        'languageTitle': 'Idioma',
+        'languageDescription': 'Selecciona tu idioma favorito',
+        'close': 'Cerrar',
+      },
+      'ca': {
+        'appBarTitle': 'Crear Aposta V2',
+        'appBarSubtitle': 'Tema i idioma a l\'abast',
+        'settingsTitle': 'Ajustos',
+        'settingsSubtitle': 'Personalitza tema i idioma',
+        'themeTitle': 'Mode clar',
+        'themeDescription': 'Activa per usar el mode clar',
+        'languageTitle': 'Idioma',
+        'languageDescription': 'Selecciona el teu idioma preferit',
+        'close': 'Tancar',
+      },
+      'en': {
+        'appBarTitle': 'Create Bet V2',
+        'appBarSubtitle': 'Theme and language ready',
+        'settingsTitle': 'Settings',
+        'settingsSubtitle': 'Personalize theme and language',
+        'themeTitle': 'Light mode',
+        'themeDescription': 'Enable to switch to the light theme',
+        'languageTitle': 'Language',
+        'languageDescription': 'Choose your preferred language',
+        'close': 'Close',
+      },
+    };
+    return localized[_selectedLanguage]?[key] ?? key;
+  }
 
   @override
   void initState() {
@@ -454,10 +501,30 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text(
-          'Crear Apuesta V2',
-          style: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _t('appBarTitle'),
+              style: TextStyle(color: primaryText, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              '${_languageLabels[_selectedLanguage]} · ${_t('appBarSubtitle')}',
+              style: TextStyle(
+                color: primaryText.withOpacity(0.72),
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
         ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.settings, color: primaryText),
+            onPressed: _showSettingsMenu,
+            tooltip: _t('settingsTitle'),
+          ),
+        ],
       ),
       body: StreamBuilder<List<Match>>(
         stream: context.watch<BetProvider>().getOpenMatchesStream(),
@@ -857,6 +924,162 @@ class _CreateBetScreenState extends State<CreateBetScreen> {
           );
         },
       ),
+    );
+  }
+
+  void _showSettingsMenu() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final themeProvider = context.watch<ThemeProvider>();
+            final isLightTheme = themeProvider.themeMode == ThemeMode.light;
+            final primaryText = Theme.of(context).brightness == Brightness.dark
+                ? Colors.white
+                : const Color(0xFF111827);
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 48,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).dividerColor,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF4F46E5), Color(0xFF0EA5E9)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.settings, color: Colors.white, size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _t('settingsTitle'),
+                              style: TextStyle(
+                                color: primaryText,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _t('settingsSubtitle'),
+                              style: TextStyle(
+                                color: primaryText.withOpacity(0.72),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
+                  Text(
+                    _t('themeTitle'),
+                    style: TextStyle(
+                      color: primaryText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Theme.of(context).dividerColor),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _t('themeDescription'),
+                            style: TextStyle(color: primaryText.withOpacity(0.85)),
+                          ),
+                        ),
+                        Switch(
+                          value: isLightTheme,
+                          onChanged: (value) {
+                            themeProvider.toggleTheme();
+                            setState(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    _t('languageTitle'),
+                    style: TextStyle(
+                      color: primaryText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _t('languageDescription'),
+                    style: TextStyle(color: primaryText.withOpacity(0.75), fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._languageLabels.entries.map(
+                    (entry) {
+                      return RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        value: entry.key,
+                        groupValue: _selectedLanguage,
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _selectedLanguage = value;
+                          });
+                        },
+                        title: Text(
+                          entry.value,
+                          style: TextStyle(color: primaryText, fontWeight: FontWeight.w500),
+                        ),
+                        activeColor: BetFlixColors.cyanBright,
+                      );
+                    },
+                  ).toList(),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(_t('close').toUpperCase()),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
